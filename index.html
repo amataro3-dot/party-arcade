@@ -31,3 +31,454 @@ input:focus{border-color:var(--blue)}
 .cdnum{font-size:96px;font-weight:800;text-align:center;color:var(--accent)}
 .rule{text-align:center}
 .rule h2{font-size:28px;margin:0 0 8px}
+.rule p{color:var(--sub);font-size:16px;line-height:1.6;margin:0 0 16px}
+.reactzone{flex:1;min-height:60vh;border-radius:20px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:44px;font-weight:800;touch-action:none}
+.reactzone.wait{background:#7a2330}
+.reactzone.go{background:var(--ok);color:#06210f}
+.reactzone small{font-size:16px;font-weight:500;display:block;margin-top:8px}
+.rk{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--card2);border-radius:10px}
+.rk .rn{width:28px;font-weight:800;color:var(--accent);font-size:18px}
+.rk .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rk .val{color:var(--sub);font-size:14px}
+.rk .pt{width:44px;text-align:right;font-weight:800;color:var(--ok)}
+.rk .tot{width:56px;text-align:right;font-weight:800;color:var(--accent);font-size:18px}
+.win{font-size:26px;font-weight:800;text-align:center;color:var(--accent);padding:8px 0}
+.detail{font-size:11px;color:var(--sub)}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 18px;border-radius:20px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.show{opacity:1}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+<script>
+/* ===== ここを自分のFirebaseの値に書き換える ===== */
+const firebaseConfig = {
+  apiKey: "AIzaSyBxf-38qXL-cUFIdJFd_x0JCJyXlHOKZHE",
+  authDomain: "labyrinth-game-bc5aa.firebaseapp.com",
+  databaseURL: "https://labyrinth-game-bc5aa-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "labyrinth-game-bc5aa",
+  storageBucket: "labyrinth-game-bc5aa.firebasestorage.app",
+  messagingSenderId: "534431752677",
+  appId: "1:534431752677:web:677413dac8ba95b0e50f0c",
+  measurementId: "G-4E4V3WDX6R"
+};
+/* ================================================ */
+
+const MAX_PLAYERS = 8;
+const POINTS = [10, 8, 6, 5, 4, 3, 2, 1]; // 順位ポイント
+const COUNTDOWN_MS = 6000;
+
+const GAMES = [
+  {
+    id: 'just5', title: '5秒ジャスト',
+    desc: 'スタートしたら数字が見えなくなる。<br>心の中で数えて、5秒ぴったりでSTOP!<br>誤差が小さいほど上位。',
+    lowerBetter: true, miss: 99999,
+    isMiss: v => v >= 99999,
+    fmt: v => v >= 99999 ? '時間切れ' : '誤差 ' + (v / 1000).toFixed(3) + '秒',
+    play: playJust5
+  },
+  {
+    id: 'tap', title: '連打対決',
+    desc: '10秒間でボタンを連打!<br>回数が多いほど上位。',
+    lowerBetter: false, miss: 0,
+    isMiss: () => false,
+    fmt: v => v + '回',
+    play: playTap
+  },
+  {
+    id: 'react', title: '反射神経',
+    desc: '赤い間は待つ。<br>緑になったらすぐタップ!<br>早すぎるとフライング。',
+    lowerBetter: true, miss: 3000,
+    isMiss: v => v >= 3000,
+    fmt: v => v >= 9999 ? 'フライング' : v >= 3000 ? '時間切れ' : v + 'ms',
+    play: playReact
+  }
+];
+
+const $ = s => document.querySelector(s);
+const $app = document.getElementById('app');
+const h = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const setApp = html => { $app.innerHTML = html; };
+
+let db = null, offset = 0, pid = '', myName = '';
+let roomId = null, room = null, roomRef = null, roomCb = null, adminTimer = null;
+let viewKey = '', roundState = null, timers = [], busy = false;
+
+const serverNow = () => Date.now() + offset;
+const getRes = i => (room && room.results && room.results['g' + i]) || {};
+
+function toast(t) {
+  const el = $('#toast'); el.textContent = t; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 1500);
+}
+function clearTimers() { timers.forEach(t => { clearTimeout(t); clearInterval(t); }); timers = []; }
+
+/* ---------- 起動 ---------- */
+function init() {
+  pid = localStorage.getItem('pid');
+  if (!pid) { pid = 'p' + Math.random().toString(36).slice(2, 10); localStorage.setItem('pid', pid); }
+  myName = localStorage.getItem('name') || '';
+
+  if (typeof firebase === 'undefined') {
+    setApp('<h1>読み込みエラー</h1><div class="card">Firebaseを読み込めませんでした。通信状況を確認して、ページを再読み込みしてね。</div>');
+    return;
+  }
+  if (!firebaseConfig.apiKey || firebaseConfig.apiKey === 'YOUR_API_KEY') {
+    setApp('<h1>設定が必要です</h1><div class="card">index.html の一番上にある <b>firebaseConfig</b> を、自分のFirebaseプロジェクトの値に書き換えてね。<br><br>(READMEに手順あり)</div>');
+    return;
+  }
+  firebase.initializeApp(firebaseConfig);
+  db = firebase.database();
+  db.ref('.info/serverTimeOffset').on('value', s => { offset = s.val() || 0; });
+
+  const saved = localStorage.getItem('room');
+  if (saved) {
+    db.ref('minigame-rooms/' + saved).once('value').then(s => {
+      const r = s.val();
+      if (r && r.players && r.players[pid]) enterRoom(saved);
+      else { localStorage.removeItem('room'); renderHome(); }
+    }).catch(() => renderHome());
+  } else renderHome();
+}
+
+/* ---------- ホーム ---------- */
+function renderHome(msg) {
+  setApp(`
+    <h1>🎮 ミニゲームバトル</h1>
+    <div class="card">
+      <label>なまえ</label>
+      <input id="name" maxlength="10" placeholder="なまえを入力" value="${h(myName)}">
+    </div>
+    <div class="card">
+      <button class="btn" id="create">ルームを作る(管理者になる)</button>
+    </div>
+    <div class="card">
+      <label>ルームID</label>
+      <input id="rid" inputmode="numeric" maxlength="4" placeholder="4けたの数字">
+      <button class="btn sub" id="join">入室する</button>
+    </div>
+    <div class="msg" id="msg">${h(msg || '')}</div>`);
+  $('#create').onclick = createRoom;
+  $('#join').onclick = joinRoom;
+}
+const setMsg = t => { const m = $('#msg'); if (m) m.textContent = t; };
+function getName() {
+  const v = $('#name').value.trim();
+  if (!v) { setMsg('なまえを入力してね'); return null; }
+  myName = v; localStorage.setItem('name', v); return v;
+}
+
+async function createRoom() {
+  if (busy) return;
+  const name = getName(); if (!name) return;
+  busy = true; setMsg('作成中…');
+  try {
+    for (let t = 0; t < 10; t++) {
+      const id = String(Math.floor(1000 + Math.random() * 9000));
+      const ref = db.ref('minigame-rooms/' + id);
+      const s = await ref.once('value');
+      if (s.exists()) continue;
+      await ref.set({
+        admin: pid, phase: 'lobby',
+        createdAt: firebase.database.ServerValue.TIMESTAMP,
+        players: { [pid]: { name, joinedAt: firebase.database.ServerValue.TIMESTAMP } }
+      });
+      busy = false; enterRoom(id); return;
+    }
+    setMsg('ルームを作れませんでした。もう一度試してね');
+  } catch (e) { setMsg('エラー: ' + e.message); }
+  busy = false;
+}
+
+async function joinRoom() {
+  if (busy) return;
+  const name = getName(); if (!name) return;
+  const id = $('#rid').value.trim();
+  if (!/^\d{4}$/.test(id)) { setMsg('ルームIDは4けたの数字だよ'); return; }
+  busy = true; setMsg('入室中…');
+  try {
+    const ref = db.ref('minigame-rooms/' + id);
+    const r = (await ref.once('value')).val();
+    if (!r) { setMsg('そのルームIDは見つかりません'); busy = false; return; }
+    const players = r.players || {};
+    if (!players[pid]) {
+      if (r.phase !== 'lobby') { setMsg('ゲーム中なので入れません'); busy = false; return; }
+      let nm = name, k = 2;
+      const names = Object.values(players).map(p => p.name);
+      while (names.includes(nm)) nm = name + (k++);
+      const tr = await ref.child('players').transaction(p => {
+        p = p || {};
+        if (p[pid]) return p;
+        if (Object.keys(p).length >= MAX_PLAYERS) return; // abort
+        p[pid] = { name: nm, joinedAt: Date.now() };
+        return p;
+      });
+      if (!tr.committed) { setMsg('満員です(最大' + MAX_PLAYERS + '人)'); busy = false; return; }
+    }
+    busy = false; enterRoom(id);
+  } catch (e) { setMsg('エラー: ' + e.message); busy = false; }
+}
+
+/* ---------- ルーム ---------- */
+function enterRoom(id) {
+  roomId = id; localStorage.setItem('room', id); viewKey = '';
+  roomRef = db.ref('minigame-rooms/' + id);
+  roomCb = roomRef.on('value', s => {
+    room = s.val();
+    if (!room) { leaveLocal('ルームが閉じられました'); return; }
+    if (!room.players || !room.players[pid]) { leaveLocal('ルームから外れました'); return; }
+    render();
+    adminCheck();
+  });
+  adminTimer = setInterval(adminCheck, 500);
+}
+
+function leaveLocal(msg) {
+  if (roomRef && roomCb) roomRef.off('value', roomCb);
+  clearInterval(adminTimer); clearTimers();
+  roomRef = null; roomCb = null; roomId = null; room = null; roundState = null; viewKey = '';
+  localStorage.removeItem('room');
+  renderHome(msg || '');
+}
+
+function leaveRoom() {
+  const isAdmin = room.admin === pid;
+  if (!confirm(isAdmin ? 'ルームを解散する?(全員が退出になります)' : 'ルームから出る?')) return;
+  const ref = db.ref('minigame-rooms/' + roomId);
+  leaveLocal('');
+  if (isAdmin) ref.remove(); else ref.child('players/' + pid).remove();
+}
+
+function render() {
+  const phase = room.phase;
+  if (phase === 'playing') {
+    const key = 'playing:' + room.round.index;
+    if (viewKey !== key) { clearTimers(); viewKey = key; buildPlay(); }
+    else updateWaiting();
+    return;
+  }
+  clearTimers(); viewKey = phase;
+  if (phase === 'lobby') renderLobby();
+  else if (phase === 'roundResult') renderRoundResult();
+  else if (phase === 'final') renderFinal();
+}
+
+/* ---------- ロビー ---------- */
+function renderLobby() {
+  const ps = Object.entries(room.players).sort((a, b) => (a[1].joinedAt || 0) - (b[1].joinedAt || 0));
+  const isAdmin = room.admin === pid;
+  setApp(`
+    <h1>ロビー</h1>
+    <div class="card center"><div class="sub">ルームID(タップでコピー)</div><div class="roomid" id="ridv">${h(roomId)}</div></div>
+    <div class="card">
+      <div class="sub">参加者 ${ps.length}/${MAX_PLAYERS}</div>
+      ${ps.map(([id, p]) => `<div class="pl">${id === room.admin ? '👑 ' : ''}${h(p.name)}${id === pid ? '<span class="you">あなた</span>' : ''}</div>`).join('')}
+    </div>
+    <div class="card sub">ゲーム: ${GAMES.map(g => h(g.title)).join(' → ')}<br>各ゲームの順位ポイントの合計が高い人が優勝!</div>
+    ${isAdmin ? '<button class="btn" id="start">ゲームスタート</button>' : '<div class="center sub">管理者のスタートを待っています…</div>'}
+    <button class="btn ghost" id="leave">${isAdmin ? 'ルームを解散' : '退出'}</button>`);
+  $('#ridv').onclick = () => { if (navigator.clipboard) navigator.clipboard.writeText(roomId).then(() => toast('コピーしました')); };
+  $('#leave').onclick = leaveRoom;
+  if (isAdmin) $('#start').onclick = () => startRound(0);
+}
+
+function startRound(i) {
+  const upd = {
+    phase: 'playing',
+    round: { index: i, startAt: serverNow() + COUNTDOWN_MS, delay: 2000 + Math.floor(Math.random() * 3000) }
+  };
+  if (i === 0) upd.results = null;
+  db.ref('minigame-rooms/' + roomId).update(upd);
+}
+
+/* 管理者: 全員提出 or タイムアウトで結果へ */
+function adminCheck() {
+  if (!room || room.admin !== pid || room.phase !== 'playing' || !room.round) return;
+  const res = getRes(room.round.index);
+  const n = Object.keys(room.players).length;
+  const c = Object.keys(res).filter(k => room.players[k]).length;
+  if (c >= n || serverNow() > room.round.startAt + 25000) {
+    db.ref('minigame-rooms/' + roomId + '/phase').set('roundResult');
+  }
+}
+
+/* ---------- プレイ画面 ---------- */
+function buildPlay() {
+  const r = room.round, g = GAMES[r.index];
+  roundState = { index: r.index, submitted: false };
+  setApp(`
+    <div class="top"><span>ゲーム ${r.index + 1}/${GAMES.length}</span><span>${h(g.title)}</span></div>
+    <div id="stage" class="stage"></div>
+    <div id="wait" class="center sub"></div>`);
+  const mine = getRes(r.index)[pid];
+  if (mine !== undefined && mine !== null) { roundState.submitted = true; showSubmitted(mine); return; }
+  if (serverNow() - r.startAt > 1500) { submit(g.miss); return; } // 途中復帰は不参加扱い
+  g.play($('#stage'), r, submit);
+}
+
+function submit(v) {
+  if (!roundState || roundState.submitted) return;
+  roundState.submitted = true;
+  clearTimers();
+  db.ref('minigame-rooms/' + roomId + '/results/g' + roundState.index + '/' + pid).set(v);
+  showSubmitted(v);
+}
+function showSubmitted(v) {
+  const g = GAMES[roundState.index];
+  $('#stage').innerHTML = `<div class="center"><div class="sub">あなたの記録</div><div class="big-num" style="font-size:44px">${h(g.fmt(v))}</div></div>`;
+  updateWaiting();
+}
+function updateWaiting() {
+  const w = $('#wait'); if (!w || !roundState) return;
+  if (!roundState.submitted) { w.textContent = ''; return; }
+  const n = Object.keys(room.players).length;
+  const c = Object.keys(getRes(roundState.index)).filter(k => room.players[k]).length;
+  w.textContent = 'みんなを待っています… ' + c + '/' + n;
+}
+
+function countdown(stage, game, round, onGo) {
+  stage.innerHTML = `<div class="rule"><h2>${h(game.title)}</h2><p>${game.desc}</p><div class="cdnum" id="cd"></div></div>`;
+  const cd = stage.querySelector('#cd');
+  const iv = setInterval(() => {
+    const rem = round.startAt - serverNow();
+    if (rem <= 0) { clearInterval(iv); onGo(); }
+    else cd.textContent = Math.ceil(rem / 1000);
+  }, 50);
+  timers.push(iv);
+}
+
+/* --- ミニゲーム1: 5秒ジャスト --- */
+function playJust5(stage, round, submit) {
+  countdown(stage, GAMES[0], round, () => {
+    stage.innerHTML = `<div class="big-num" id="t">0.00</div><div class="center sub">5.00秒ぴったりで止めろ!</div><button class="btn big" id="stop">STOP</button>`;
+    const el = stage.querySelector('#t');
+    const t0 = performance.now();
+    let done = false;
+    const iv = setInterval(() => {
+      const e = performance.now() - t0;
+      el.textContent = e < 2000 ? (e / 1000).toFixed(2) : '?.??';
+      if (e > 12000 && !done) { done = true; submit(GAMES[0].miss); }
+    }, 30);
+    timers.push(iv);
+    stage.querySelector('#stop').addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      if (done) return;
+      done = true; clearInterval(iv);
+      submit(Math.round(Math.abs(performance.now() - t0 - 5000)));
+    });
+  });
+}
+
+/* --- ミニゲーム2: 連打対決 --- */
+function playTap(stage, round, submit) {
+  countdown(stage, GAMES[1], round, () => {
+    stage.innerHTML = `<div class="center sub">残り <b id="left">10.0</b> 秒</div><div class="big-num" id="cnt">0</div><button class="btn big" id="tapb">TAP!</button>`;
+    const cnt = stage.querySelector('#cnt'), left = stage.querySelector('#left');
+    const DUR = 10000, t0 = performance.now();
+    let n = 0, done = false;
+    stage.querySelector('#tapb').addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      if (done) return;
+      n++; cnt.textContent = n;
+    });
+    const iv = setInterval(() => {
+      const e = performance.now() - t0;
+      left.textContent = Math.max(0, (DUR - e) / 1000).toFixed(1);
+      if (e >= DUR && !done) { done = true; clearInterval(iv); submit(n); }
+    }, 50);
+    timers.push(iv);
+  });
+}
+
+/* --- ミニゲーム3: 反射神経 --- */
+function playReact(stage, round, submit) {
+  countdown(stage, GAMES[2], round, () => {
+    stage.innerHTML = `<div class="reactzone wait" id="rz"><div>待て…<small>緑になったらタップ!</small></div></div>`;
+    const z = stage.querySelector('#rz');
+    let state = 'wait', t0 = 0;
+    const goTimer = setTimeout(() => {
+      state = 'go'; z.className = 'reactzone go'; z.innerHTML = '<div>今!</div>';
+      t0 = performance.now();
+      timers.push(setTimeout(() => { if (state === 'go') { state = 'done'; submit(3000); } }, 3000));
+    }, round.delay);
+    timers.push(goTimer);
+    z.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      if (state === 'wait') { state = 'done'; clearTimeout(goTimer); submit(9999); }
+      else if (state === 'go') { state = 'done'; submit(Math.min(2999, Math.round(performance.now() - t0))); }
+    });
+  });
+}
+
+/* ---------- 集計 ---------- */
+function rankGame(gi) {
+  const g = GAMES[gi], res = getRes(gi);
+  const list = Object.keys(room.players).map(id => ({
+    id, name: room.players[id].name, v: res[id] === undefined ? null : res[id]
+  }));
+  const better = (a, b) => a.v !== null && (b.v === null || (g.lowerBetter ? a.v < b.v : a.v > b.v));
+  list.forEach(p => {
+    p.rank = 1 + list.filter(q => better(q, p)).length;
+    p.pts = (p.v === null || g.isMiss(p.v)) ? 0 : (POINTS[p.rank - 1] !== undefined ? POINTS[p.rank - 1] : 1);
+  });
+  list.sort((a, b) => a.rank - b.rank);
+  return list;
+}
+function standing(upTo) {
+  const m = {};
+  Object.keys(room.players).forEach(id => { m[id] = []; });
+  for (let i = 0; i <= upTo; i++) rankGame(i).forEach(p => m[p.id].push(p.pts));
+  const list = Object.keys(m).map(id => ({
+    id, name: room.players[id].name, pts: m[id], total: m[id].reduce((a, b) => a + b, 0)
+  }));
+  list.forEach(p => { p.rank = 1 + list.filter(q => q.total > p.total).length; });
+  list.sort((a, b) => a.rank - b.rank);
+  return list;
+}
+
+/* ---------- 結果 ---------- */
+function renderRoundResult() {
+  const gi = room.round.index, g = GAMES[gi];
+  const list = rankGame(gi), st = standing(gi);
+  const isAdmin = room.admin === pid, last = gi >= GAMES.length - 1;
+  setApp(`
+    <h1>${h(g.title)} の結果</h1>
+    <div class="card">
+      ${list.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (あなた)' : ''}</span><span class="val">${p.v === null ? '未提出' : h(g.fmt(p.v))}</span><span class="pt">+${p.pts}</span></div>`).join('')}
+    </div>
+    <div class="card">
+      <div class="sub">ここまでの合計</div>
+      ${st.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (あなた)' : ''}</span><span class="tot">${p.total}</span></div>`).join('')}
+    </div>
+    ${isAdmin ? `<button class="btn" id="next">${last ? '最終結果へ' : '次のゲームへ'}</button>` : '<div class="center sub">管理者の操作を待っています…</div>'}`);
+  if (isAdmin) $('#next').onclick = () => {
+    if (last) db.ref('minigame-rooms/' + roomId + '/phase').set('final');
+    else startRound(gi + 1);
+  };
+}
+
+function renderFinal() {
+  const st = standing(GAMES.length - 1);
+  const winners = st.filter(p => p.rank === 1).map(p => h(p.name)).join(' & ');
+  const isAdmin = room.admin === pid;
+  setApp(`
+    <h1>最終結果</h1>
+    <div class="win">🏆 優勝: ${winners}</div>
+    <div class="card">
+      ${st.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (あなた)' : ''}<div class="detail">${p.pts.join(' / ')}</div></span><span class="tot">${p.total}</span></div>`).join('')}
+    </div>
+    ${isAdmin ? '<button class="btn" id="again">ロビーに戻る(もう一度)</button>' : '<div class="center sub">管理者の操作を待っています…</div>'}
+    <button class="btn ghost" id="leave">${isAdmin ? 'ルームを解散' : '退出'}</button>`);
+  $('#leave').onclick = leaveRoom;
+  if (isAdmin) $('#again').onclick = () => db.ref('minigame-rooms/' + roomId).update({ phase: 'lobby', results: null, round: null });
+}
+
+init();
+</script>
+</body>
+</html>
+
+   
