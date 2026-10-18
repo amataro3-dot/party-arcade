@@ -27,6 +27,8 @@ let viewKey = '', roundState = null, timers = [], busy = false;
 
 const serverNow = () => Date.now() + offset;
 const getRes = i => (room && room.results && room.results['g' + i]) || {};
+/* game.result(要素, データ) があるゲームだけ、結果の欄に絵を描かせる。失敗してもその画面は壊さない */
+const callResult = (g, el, data) => { try { g.result(el, data); } catch (e) { console.error(e); } };
 const getExtra = i => (room && room.extras && room.extras['g' + i]) || {};
 /* 結果画面が出た直後0.7秒は、ボタンを押しても動かない(指が触れたままの誤タップ対策) */
 let guardUntil = 0;
@@ -120,10 +122,11 @@ function practiceResult(g, v, x) {
   guardUntil = Date.now() + 700;
   setApp(`
     <h1>${h(g.title)}</h1>
-    <div class="card center"><div class="sub">あなたの記録</div><div class="big-num" style="font-size:44px">${h(g.fmt(v, x))}</div>${g.viz && x ? g.viz(v, x) : ''}</div>
+    <div class="card center"><div class="sub">あなたの記録</div><div class="big-num" style="font-size:44px">${h(g.fmt(v, x))}</div>${g.result && x !== undefined ? '<div class="viz" id="rbox"></div>' : (g.viz && x ? g.viz(v, x) : '')}</div>
     <button class="btn" id="again">もう一度</button>
     <button class="btn sub" id="pick">ゲームを選ぶ</button>
     <button class="btn ghost" id="home">ホームに戻る</button>`);
+  if (g.result && x !== undefined) callResult(g, $('#rbox'), x);
   $('#again').onclick = guarded(() => startPractice(g.id));
   $('#pick').onclick = guarded(renderPractice);
   $('#home').onclick = guarded(() => renderHome());
