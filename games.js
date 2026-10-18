@@ -1,6 +1,9 @@
-/* ミニゲーム本体。ゲームを足すときは、このファイルの GAMES に項目を足して、play 関数を書く。 */
+/* ミニゲーム本体(1/4)。ゲームの一覧 GAMES と、全ゲーム共通の道具(seededRng / countdown)もここにある。
+   ゲームを足すときは、新しいファイルに play 関数と GAMES.push({...}) を書いて、index.html の script に足す。 */
 
-const GAMES = [
+const GAMES = [];
+
+GAMES.push(
   {
     id: 'just5', title: '5秒ジャスト',
     desc: 'スタートしたら数字が見えなくなる。<br>心の中で数えて、5秒ぴったりでSTOP!<br>誤差が小さいほど上位。',
@@ -45,19 +48,20 @@ const GAMES = [
       return `<div class="vbar"><div class="vfill" style="width:${pct(cm)}%"></div><div class="vmark" style="left:${pct(t)}%"></div></div><div class="vlabel">描いた線 ${cm.toFixed(2)}cm ・ お題 ${t}cm</div>`;
     },
     play: playDrawCm
-  },
-  {
-    id: 'cut', title: 'キレイに切って!',
-    descBase: '真ん中の点から円の外までドラッグして切ろう!<br>離すと線が残る。「1つ戻る」でやり直せる。<br>お題の数だけ切ったら終了。<br>1切れずつの大きさがそろうほど上位。',
-    desc: '真ん中の点から円の外までドラッグして切ろう!<br>離すと線が残る。「1つ戻る」でやり直せる。<br>お題の数だけ切ったら終了。<br>1切れずつの大きさがそろうほど上位。',
-    lowerBetter: true, miss: 99,
-    isMiss: v => v >= 99,
-    fmt: v => v >= 99 ? '失敗' : 'ズレ ' + v.toFixed(2) + '%',
-    play: playCut,
-    // リザルト用:その人の切った円を el の中に描く(data は submit の2つ目で送ったもの)
-    result: drawCutResult
   }
-];
+);
+
+/* 全員同じ問題を出すための乱数。種(round.delay など)が同じなら、全員が同じ並びになる */
+function seededRng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
 
 function countdown(stage, game, round, onGo) {
   const m = multAt(round.index);
@@ -236,6 +240,32 @@ function playDrawCm(stage, round, submit) {
     timers.push(iv);
   });
 }
+/* ミニゲーム本体(2/4): キレイに切って! / 角度を描け!。 GAMES.push は、games.js より後に読み込むこと。 */
+
+GAMES.push(
+  {
+    id: 'cut', title: 'キレイに切って!',
+    descBase: '真ん中の点から円の外までドラッグして切ろう!<br>離すと線が残る。「1つ戻る」でやり直せる。<br>お題の数だけ切ったら終了。<br>1切れずつの大きさがそろうほど上位。',
+    desc: '真ん中の点から円の外までドラッグして切ろう!<br>離すと線が残る。「1つ戻る」でやり直せる。<br>お題の数だけ切ったら終了。<br>1切れずつの大きさがそろうほど上位。',
+    lowerBetter: true, miss: 99,
+    isMiss: v => v >= 99,
+    fmt: v => v >= 99 ? '失敗' : 'ズレ ' + v.toFixed(2) + '%',
+    play: playCut,
+    // リザルト用:その人の切った円を el の中に描く(data は submit の2つ目で送ったもの)
+    result: drawCutResult
+  },
+  {
+    id: 'angle', title: '角度を描け!',
+    descBase: '真ん中の点からドラッグして、お題の角度の線を引こう!<br>灰色の線とのあいだの角度で判定。<br>離したあと「決定!」で確定。お題に近いほど上位。',
+    desc: '真ん中の点からドラッグして、お題の角度の線を引こう!<br>灰色の線とのあいだの角度で判定。<br>離したあと「決定!」で確定。お題に近いほど上位。',
+    lowerBetter: true, miss: 999,
+    isMiss: v => v >= 999,
+    fmt: v => v >= 999 ? '失敗' : '誤差 ' + v.toFixed(1) + '°',
+    play: playAngle,
+    // リザルト用:その人の線を el の中に描く(data は submit の2つ目で送ったもの)
+    result: drawAngleResult
+  }
+);
 
 /* --- ミニゲーム5: キレイに切って! --- */
 function playCut(stage, round, submit) {
@@ -407,4 +437,810 @@ function drawCutResult(el, data, size) {
   const cuts = (Array.isArray(raw) ? raw : Object.values(raw)).map(d => d * Math.PI / 180);
   drawCutCircle(ctx, size / 2, size / 2, size * 0.46, cuts, 0);
   el.appendChild(cv);
+}
+
+/* --- ミニゲーム6: 角度を描け! --- */
+function playAngle(stage, round, submit) {
+  // 番号ではなく id で自分を探すので、組み込み時に番号を直さなくてよい
+  const game = GAMES.find(g => g.id === 'angle');
+  const d = Math.floor(round.delay);
+  // 全員共通の round.delay からお題と基準線の向きを決める → 10〜165度(5度刻み)
+  const target = 10 + (d % 32) * 5;
+  const ref = (Math.floor(d / 32) % 12) * 30;
+
+  // カウントダウン中(5秒)にお題を見せる
+  game.desc = game.descBase +
+    `<div style="margin-top:14px;font-size:22px">お題 <b style="color:#ffcc33">${target}度</b></div>`;
+
+  countdown(stage, game, round, () => {
+    stage.innerHTML =
+      `<div class="center" style="font-size:22px;margin:6px 0"><b style="color:#ffcc33">${target}度</b> を作って!</div>` +
+      `<div class="center sub" id="info">灰色の線から ${target}度 ・ 残り <b id="left">15.0</b> 秒</div>` +
+      `<canvas id="pad" style="display:block;width:100%;height:50vh;margin-top:8px;touch-action:none"></canvas>` +
+      `<div class="center" style="display:flex;gap:10px;justify-content:center;margin-top:8px">` +
+      `<button class="btn" id="redo" style="min-width:130px">やり直す</button>` +
+      `<button class="btn" id="ok" style="min-width:130px">決定!</button></div>`;
+
+    const cv = stage.querySelector('#pad');
+    const info = stage.querySelector('#info');
+    const redo = stage.querySelector('#redo');
+    const ok = stage.querySelector('#ok');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = cv.getBoundingClientRect();
+    const W = rect.width, H = rect.height;
+    cv.width = W * dpr; cv.height = H * dpr;
+    const ctx = cv.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const cx = W / 2, cy = H / 2;
+    const R = Math.min(W, H) * 0.42;
+    const HIT = Math.max(36, R * 0.22);      // 真ん中の点をつかめる範囲
+    const MIN = R * 0.3;                      // これより短い線は無効
+    const DUR = 15000, t0 = performance.now();
+    let drag = null, pid = null, cur = null, done = false, iv = null;
+
+    const pos = ev => {
+      const b = cv.getBoundingClientRect();
+      return { x: ev.clientX - b.left, y: ev.clientY - b.top };
+    };
+    const dist = p => Math.hypot(p.x - cx, p.y - cy);
+    const degOf = p => Math.atan2(p.y - cy, p.x - cx) * 180 / Math.PI;
+    const ui = () => {
+      const on = cur != null && !done;
+      ok.style.opacity = on ? '1' : '0.35';
+      redo.style.opacity = on ? '1' : '0.35';
+    };
+    const draw = reveal => {
+      ctx.clearRect(0, 0, W, H);
+      drawAngleScene(ctx, cx, cy, R, ref, drag ? degOf(drag) : cur, target, reveal);
+    };
+    // 結果送信。2つ目は線の向きなど。リザルトで全員の線を描くのに使う
+    const finish = (v, u) => {
+      if (done) return;
+      done = true;
+      clearInterval(iv);
+      ui();
+      submit(v, { t: target, r: ref, a: u == null ? null : Math.round(u * 10) / 10 });
+    };
+    const decide = () => {
+      if (cur == null) { draw(false); finish(999, null); return; }
+      const ang = angleBetween(cur, ref);
+      const err = Math.round(Math.abs(ang - target) * 10) / 10;
+      draw(true);
+      info.innerHTML = `あなたの角度 <b style="color:#ffcc33">${ang.toFixed(1)}°</b> ・ 誤差 <b style="color:#ffcc33">${err.toFixed(1)}°</b>`;
+      finish(err, cur);
+    };
+
+    ok.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      if (done || drag || cur == null) return;
+      decide();
+    });
+    redo.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      if (done || drag || cur == null) return;
+      cur = null; ui(); draw();
+    });
+
+    cv.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      if (done || drag) return;
+      const p = pos(ev);
+      if (dist(p) > HIT) return;               // 真ん中の点から始めたときだけ
+      drag = p; pid = ev.pointerId; cur = null;
+      try { cv.setPointerCapture(pid); } catch (e) {}
+      ui(); draw();
+    });
+    cv.addEventListener('pointermove', ev => {
+      if (done || !drag || ev.pointerId !== pid) return;
+      ev.preventDefault();
+      drag = pos(ev);
+      draw();
+    });
+    cv.addEventListener('pointerup', ev => {
+      if (done || !drag || ev.pointerId !== pid) return;
+      const p = pos(ev);
+      drag = null;
+      cur = dist(p) >= MIN ? degOf(p) : null;  // 短すぎる線はやり直し
+      ui(); draw();
+    });
+    cv.addEventListener('pointercancel', ev => {
+      if (done || ev.pointerId !== pid) return;
+      drag = null; cur = null; ui(); draw();
+    });
+
+    ui(); draw();
+    iv = setInterval(() => {
+      const e = performance.now() - t0;
+      const left = stage.querySelector('#left');
+      if (!done && left) left.textContent = Math.max(0, (DUR - e) / 1000).toFixed(1);
+      if (e >= DUR && !done) { drag = null; decide(); } // 時間切れ:線があればそれで判定、なければ失敗
+    }, 50);
+    timers.push(iv);
+  });
+}
+
+// 2本の線(基準線と自分の線)のあいだの角度 0〜180
+function angleBetween(userDeg, refDeg) {
+  let a = ((userDeg - refDeg) % 360 + 360) % 360;
+  return a > 180 ? 360 - a : a;
+}
+
+// 円・基準線・自分の線を描く(プレイ画面とリザルトで共用)
+// reveal が true のとき、お題の角度の位置を黄色の点線で見せる
+function drawAngleScene(ctx, cx, cy, R, ref, userDeg, target, reveal) {
+  const rad = d => d * Math.PI / 180;
+  const w = Math.max(2, R / 35);
+  const line = (deg, color, lw, dash) => {
+    ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineCap = 'round';
+    ctx.setLineDash(dash || []);
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(rad(deg)) * R, cy + Math.sin(rad(deg)) * R);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  };
+  ctx.strokeStyle = 'rgba(242,244,255,0.25)';
+  ctx.lineWidth = Math.max(1, R / 80);
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke();
+  line(ref, 'rgba(242,244,255,0.55)', w);                 // 基準線(灰色)
+  if (userDeg != null) {
+    if (reveal) {
+      const signed = (((userDeg - ref) % 360) + 540) % 360 - 180;
+      const side = signed >= 0 ? 1 : -1;                  // 自分の線と同じ側にお題を出す
+      line(ref + side * target, '#ffcc33', w * 0.7, [w * 2, w * 2]);
+    }
+    line(userDeg, '#f2f4ff', w);                          // 自分の線
+  }
+  ctx.fillStyle = '#ffcc33';
+  ctx.beginPath(); ctx.arc(cx, cy, Math.max(3, R / 14), 0, Math.PI * 2); ctx.fill();
+}
+
+// リザルト用:el(div など)の中に、その人の線を小さく描く
+function drawAngleResult(el, data, size) {
+  size = size || 90;
+  const dpr = window.devicePixelRatio || 1;
+  const cv = document.createElement('canvas');
+  cv.width = size * dpr; cv.height = size * dpr;
+  cv.style.width = size + 'px'; cv.style.height = size + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  if (data) drawAngleScene(ctx, size / 2, size / 2, size * 0.46, data.r, data.a, data.t, true);
+  el.appendChild(cv);
+}
+/* ミニゲーム本体(3/4): 真ん中をタップ! / 後出しジャンケン! / 色ちがい探し!。 GAMES.push は、games.js より後に読み込むこと。 */
+
+GAMES.push(
+  {
+    id: 'mid', title: '真ん中をタップ!',
+    descBase: '図形の「真ん中(重心)」だと思う場所を指で押そう!<br>指を動かして調整、離したら決定。<br>本物の真ん中に近いほど上位。',
+    desc: '図形の「真ん中(重心)」だと思う場所を指で押そう!<br>指を動かして調整、離したら決定。<br>本物の真ん中に近いほど上位。',
+    lowerBetter: true, miss: 999,
+    isMiss: v => v >= 999,
+    fmt: v => v >= 999 ? '失敗' : '誤差 ' + v.toFixed(1) + '%',
+    play: playMid,
+    // リザルト用:その人のタップ位置を el の中に描く(data は submit の2つ目で送ったもの)
+    result: drawMidResult
+  },
+  {
+    id: 'janken', title: '後出しジャンケン!',
+    desc: '相手の手を見て、「勝って!」なら勝つ手、「負けて!」なら負ける手をすばやく出そう!<br>15秒で何問正解できるか勝負。<br>まちがえると0.8秒おやすみ。<br>正解数が多いほど上位。0問は0点。',
+    lowerBetter: false, miss: 0,
+    isMiss: v => v <= 0,
+    fmt: v => v + '問',
+    play: playJanken
+  },
+  {
+    id: 'oddcolor', title: '色ちがい探し!',
+    desc: 'ほんの少しだけ色がちがうマスを1つ探してタッチ!<br>15秒で何問正解できるか勝負。<br>まちがえると1秒おやすみ。<br>正解数が多いほど上位。0問は0点。',
+    lowerBetter: false, miss: 0,
+    isMiss: v => v <= 0,
+    fmt: v => v + '問',
+    play: playOddColor
+  }
+);
+
+/* --- ミニゲーム7: 真ん中をタップ! --- */
+function playMid(stage, round, submit) {
+  // 番号ではなく id で自分を探すので、組み込み時に番号を直さなくてよい
+  const game = GAMES.find(g => g.id === 'mid');
+  const d = Math.floor(round.delay);
+  // 全員共通の round.delay から図形(6種類)と向き(30度刻み)を決める
+  const shape = d % 6;
+  const rot = (Math.floor(d / 6) % 12) * 30;
+  const pts = midShape(shape, rot);
+  const cen = midCentroid(pts);
+
+  game.desc = game.descBase;
+
+  countdown(stage, game, round, () => {
+    stage.innerHTML =
+      `<div class="center" style="font-size:22px;margin:6px 0">真ん中を <b style="color:#ffcc33">タップ!</b></div>` +
+      `<div class="center sub" id="info">残り <b id="left">10.0</b> 秒</div>` +
+      `<canvas id="pad" style="display:block;width:100%;height:58vh;margin-top:8px;touch-action:none"></canvas>`;
+
+    const cv = stage.querySelector('#pad');
+    const info = stage.querySelector('#info');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = cv.getBoundingClientRect();
+    const W = rect.width, H = rect.height;
+    cv.width = W * dpr; cv.height = H * dpr;
+    const ctx = cv.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const S = Math.min(W, H) * 0.95;          // 図形を入れる正方形の1辺
+    const ox = (W - S) / 2, oy = (H - S) / 2;
+    const DUR = 10000, t0 = performance.now();
+    let tap = null, pid = null, done = false, iv = null; // tap は 0〜1 の座標
+
+    const pos = ev => {
+      const b = cv.getBoundingClientRect();
+      return { x: (ev.clientX - b.left - ox) / S, y: (ev.clientY - b.top - oy) / S };
+    };
+    const draw = reveal => {
+      ctx.clearRect(0, 0, W, H);
+      drawMidScene(ctx, ox, oy, S, pts, tap, reveal);
+    };
+    // 結果送信。2つ目は図形の種類・向き・タップ位置。リザルトで全員の位置を描くのに使う
+    const finish = v => {
+      if (done) return;
+      done = true;
+      clearInterval(iv);
+      submit(v, { s: shape, r: rot, t: tap ? [Math.round(tap.x * 1000) / 1000, Math.round(tap.y * 1000) / 1000] : null });
+    };
+    const decide = () => {
+      if (!tap) { draw(false); finish(999); return; }
+      const err = Math.round(Math.hypot(tap.x - cen.x, tap.y - cen.y) * 100 * 10) / 10; // 1辺に対する%
+      draw(true);
+      info.innerHTML = `誤差 <b style="color:#ffcc33">${err.toFixed(1)}%</b>`;
+      finish(err);
+    };
+
+    cv.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      if (done || pid !== null) return;
+      pid = ev.pointerId;
+      try { cv.setPointerCapture(pid); } catch (e) {}
+      tap = pos(ev);
+      draw();
+    });
+    cv.addEventListener('pointermove', ev => {
+      if (done || ev.pointerId !== pid) return;
+      ev.preventDefault();
+      tap = pos(ev);
+      draw();
+    });
+    cv.addEventListener('pointerup', ev => {
+      if (done || ev.pointerId !== pid) return;
+      tap = pos(ev);
+      pid = null;
+      decide();
+    });
+    cv.addEventListener('pointercancel', ev => {
+      if (done || ev.pointerId !== pid) return;
+      pid = null; tap = null; draw();
+    });
+
+    draw();
+    iv = setInterval(() => {
+      const e = performance.now() - t0;
+      const left = stage.querySelector('#left');
+      if (!done && left) left.textContent = Math.max(0, (DUR - e) / 1000).toFixed(1);
+      if (e >= DUR && !done) { pid = null; decide(); } // 時間切れ:押していればその位置で判定、なければ失敗
+    }, 50);
+    timers.push(iv);
+  });
+}
+
+// 図形(0〜1 の座標)。向きを回して返す
+function midShape(i, rotDeg) {
+  const base = [
+    [[.10,.45],[.90,.45],[.90,.55],[.10,.55]],                                   // 棒
+    [[.15,.80],[.85,.70],[.40,.15]],                                             // 三角形
+    [[.20,.15],[.40,.15],[.40,.60],[.80,.60],[.80,.80],[.20,.80]],               // L字
+    [[.10,.20],[.30,.20],[.50,.55],[.70,.20],[.90,.20],[.50,.85]],               // V字
+    [[.50,.10],[.90,.40],[.75,.85],[.25,.80],[.12,.35]],                         // 五角形(いびつ)
+    [[.10,.15],[.90,.15],[.90,.35],[.60,.35],[.60,.85],[.40,.85],[.40,.35],[.10,.35]] // T字
+  ][i % 6];
+  const a = rotDeg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  return base.map(([x, y]) => {
+    const dx = (x - .5) * .9, dy = (y - .5) * .9;      // 少し縮めて、回しても枠からはみ出さない
+    return [.5 + dx * c - dy * s, .5 + dx * s + dy * c];
+  });
+}
+
+// 多角形の重心(面積の中心)
+function midCentroid(pts) {
+  let A = 0, cx = 0, cy = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const [x0, y0] = pts[i], [x1, y1] = pts[(i + 1) % pts.length];
+    const cr = x0 * y1 - x1 * y0;
+    A += cr; cx += (x0 + x1) * cr; cy += (y0 + y1) * cr;
+  }
+  A /= 2;
+  return { x: cx / (6 * A), y: cy / (6 * A) };
+}
+
+// 図形・タップ位置を描く(プレイ画面とリザルトで共用)
+// reveal が true のとき、本物の真ん中(黄色の十字)とのズレも見せる
+function drawMidScene(ctx, ox, oy, S, pts, tap, reveal) {
+  const X = x => ox + x * S, Y = y => oy + y * S;
+  ctx.fillStyle = 'rgba(255,204,51,0.22)';
+  ctx.strokeStyle = '#f2f4ff'; ctx.lineWidth = Math.max(1.5, S / 120); ctx.lineJoin = 'round';
+  ctx.beginPath();
+  pts.forEach(([x, y], i) => i ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)));
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  const dot = Math.max(3, S / 45);
+  if (reveal && tap) {
+    const c = midCentroid(pts), k = dot * 1.6;
+    ctx.strokeStyle = '#ffcc33'; ctx.lineWidth = Math.max(1.5, S / 100); ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(X(c.x), Y(c.y)); ctx.lineTo(X(tap.x), Y(tap.y)); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(X(c.x) - k, Y(c.y)); ctx.lineTo(X(c.x) + k, Y(c.y));
+    ctx.moveTo(X(c.x), Y(c.y) - k); ctx.lineTo(X(c.x), Y(c.y) + k);
+    ctx.stroke();
+  }
+  if (tap) {
+    ctx.fillStyle = '#f2f4ff';
+    ctx.beginPath(); ctx.arc(X(tap.x), Y(tap.y), dot, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
+// リザルト用:el(div など)の中に、その人のタップ位置を小さく描く
+function drawMidResult(el, data, size) {
+  size = size || 90;
+  const dpr = window.devicePixelRatio || 1;
+  const cv = document.createElement('canvas');
+  cv.width = size * dpr; cv.height = size * dpr;
+  cv.style.width = size + 'px'; cv.style.height = size + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  if (data) {
+    const tap = data.t ? { x: data.t[0], y: data.t[1] } : null;
+    drawMidScene(ctx, 0, 0, size, midShape(data.s, data.r), tap, true);
+  }
+  el.appendChild(cv);
+}
+
+/* --- ミニゲーム8: 後出しジャンケン! --- */
+function playJanken(stage, round, submit) {
+  // 番号ではなく id で自分を探すので、組み込み時に番号を直さなくてよい
+  const game = GAMES.find(g => g.id === 'janken');
+  const NAME = ['グー', 'チョキ', 'パー'], EMO = ['✊', '✌️', '✋'];
+  const DUR = 15000, LOCK = 800;
+  // 全員同じ問題:相手の手と「勝って/負けて」。正解の手が2問続けて同じにならないようにする
+  const rnd = seededRng(Math.round((round.delay || 3000) * 1000));
+  const qs = [];
+  let prev = -1;
+  while (qs.length < 300) {
+    const hand = Math.floor(rnd() * 3), win = rnd() < 0.5;
+    const ans = win ? (hand + 2) % 3 : (hand + 1) % 3;   // 0=グー 1=チョキ 2=パー
+    if (ans === prev) continue;
+    prev = ans;
+    qs.push({ hand, win, ans });
+  }
+
+  countdown(stage, game, round, () => {
+    const btn = i => `<div data-h="${i}" style="flex:1;height:22vh;min-height:92px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:52px;line-height:1.1;border:2px solid rgba(255,255,255,0.25);border-radius:16px;background:rgba(255,255,255,0.1);user-select:none;-webkit-user-select:none;touch-action:manipulation">${EMO[i]}<span style="font-size:15px;margin-top:4px">${NAME[i]}</span></div>`;
+    stage.innerHTML =
+      `<div class="center sub" style="font-size:18px;margin:4px 0">正解 <b id="ok" style="color:#ffcc33;font-size:26px">0</b> 問 ・ 残り <b id="left">15.0</b> 秒</div>` +
+      `<div class="center" style="margin-top:4px"><div class="sub">相手</div>` +
+      `<div id="hand" style="font-size:110px;line-height:1.15"></div>` +
+      `<div id="mode" style="display:inline-block;padding:6px 26px;border-radius:999px;font-size:30px;font-weight:bold"></div>` +
+      `<div class="sub" id="msg" style="min-height:24px;margin-top:6px;color:#ff8a8a"></div></div>` +
+      `<div id="btns" style="display:flex;gap:10px;margin:8px auto 0;max-width:460px;-webkit-tap-highlight-color:transparent">${btn(0)}${btn(1)}${btn(2)}</div>`;
+    const okEl = stage.querySelector('#ok');
+    const left = stage.querySelector('#left');
+    const handEl = stage.querySelector('#hand');
+    const modeEl = stage.querySelector('#mode');
+    const msg = stage.querySelector('#msg');
+    const btns = stage.querySelector('#btns');
+
+    const t0 = performance.now();
+    let n = 0, lock = false, done = false, iv = null;
+
+    const show = () => {
+      const q = qs[n];
+      handEl.textContent = EMO[q.hand];
+      modeEl.textContent = q.win ? '勝って!' : '負けて!';
+      modeEl.style.background = q.win ? '#ffcc33' : '#5b8cff';
+      modeEl.style.color = q.win ? '#1a1f3a' : '#ffffff';
+    };
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearInterval(iv);
+      btns.style.opacity = '0.35';
+      msg.style.color = '#ffcc33';
+      msg.textContent = '終了! ' + n + '問';
+      submit(n);
+    };
+
+    btns.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      const c = ev.target.closest('[data-h]');
+      if (done || lock || !c) return;
+      if (+c.dataset.h === qs[n].ans) {          // 正解:すぐ次の問題
+        n++;
+        okEl.textContent = n;
+        show();
+      } else {                                   // まちがい:0.8秒おやすみ(同じ問題のまま)
+        lock = true;
+        btns.style.opacity = '0.35';
+        msg.textContent = 'ちがう!';
+        timers.push(setTimeout(() => {
+          if (done) return;
+          lock = false;
+          btns.style.opacity = '1';
+          msg.textContent = '';
+        }, LOCK));
+      }
+    });
+
+    show();
+    iv = setInterval(() => {
+      const e = performance.now() - t0;
+      if (!done) left.textContent = Math.max(0, (DUR - e) / 1000).toFixed(1);
+      if (e >= DUR) finish();
+    }, 50);
+    timers.push(iv);
+  });
+}
+
+/* --- ミニゲーム9: 色ちがい探し! --- */
+function playOddColor(stage, round, submit) {
+  // 番号ではなく id で自分を探すので、組み込み時に番号を直さなくてよい
+  const game = GAMES.find(g => g.id === 'oddcolor');
+  const seed = Math.round((round.delay || 3000) * 1000);
+  const DUR = 15000, LOCK = 1000;
+
+  countdown(stage, game, round, () => {
+    stage.innerHTML =
+      `<div class="center sub" style="font-size:18px;margin:4px 0">正解 <b id="ok" style="color:#ffcc33;font-size:26px">0</b> 問 ・ 残り <b id="left">15.0</b> 秒</div>` +
+      `<div class="center sub" id="msg" style="min-height:24px;color:#ff8a8a"></div>` +
+      `<div id="grid" style="display:grid;gap:6px;max-width:440px;margin:6px auto 0;-webkit-tap-highlight-color:transparent"></div>`;
+    const grid = stage.querySelector('#grid');
+    const okEl = stage.querySelector('#ok');
+    const left = stage.querySelector('#left');
+    const msg = stage.querySelector('#msg');
+
+    const t0 = performance.now();
+    let n = 0, q = null, lock = false, done = false, iv = null;
+
+    const render = () => {
+      q = oddcolorQuestion(seed, n);
+      const base = `hsl(${q.hue},${q.s}%,${q.l}%)`;
+      const odd = `hsl(${q.hue},${q.s}%,${q.l + q.sign * q.delta}%)`;
+      grid.style.gridTemplateColumns = `repeat(${q.size},1fr)`;
+      let h = '';
+      for (let k = 0; k < q.size * q.size; k++) {
+        h += `<div data-i="${k}" style="aspect-ratio:1;border-radius:8px;touch-action:manipulation;background:${k === q.odd ? odd : base}"></div>`;
+      }
+      grid.innerHTML = h;
+    };
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearInterval(iv);
+      grid.style.opacity = '0.35';
+      msg.style.color = '#ffcc33';
+      msg.textContent = '終了! ' + n + '問';
+      submit(n);
+    };
+
+    grid.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      const c = ev.target.closest('[data-i]');
+      if (done || lock || !c) return;
+      if (+c.dataset.i === q.odd) {              // 正解:すぐ次の問題
+        n++;
+        okEl.textContent = n;
+        render();
+      } else {                                   // まちがい:1秒おやすみ(同じ問題のまま)
+        lock = true;
+        grid.style.opacity = '0.35';
+        msg.textContent = 'ちがう! 1秒おやすみ';
+        timers.push(setTimeout(() => {
+          if (done) return;
+          lock = false;
+          grid.style.opacity = '1';
+          msg.textContent = '';
+        }, LOCK));
+      }
+    });
+
+    render();
+    iv = setInterval(() => {
+      const e = performance.now() - t0;
+      if (!done) left.textContent = Math.max(0, (DUR - e) / 1000).toFixed(1);
+      if (e >= DUR) finish();
+    }, 50);
+    timers.push(iv);
+  });
+}
+
+// i 問目の問題。種が同じなら全員同じ問題になる。
+// 最初から難しい(色の差は2.4%から始まり、1.1%まで小さくなる)。ここの数字を変えると難しさが変わる
+function oddcolorQuestion(seed, i) {
+  const r = seededRng(seed * 31 + i * 7919 + 1);
+  const size = i < 3 ? 5 : i < 7 ? 6 : 7;        // 5x5 → 6x6 → 7x7
+  const hue = Math.floor(r() * 360);
+  const s = 50 + Math.floor(r() * 25);
+  const l = 46 + Math.floor(r() * 14);
+  const delta = Math.max(1.1, 2.4 - i * 0.12);   // 明るさの差(%)
+  const odd = Math.floor(r() * size * size);
+  const sign = r() < 0.5 ? -1 : 1;
+  return { size, hue, s, l, delta, odd, sign };
+}
+/* ミニゲーム本体(4/4): 数字タッチ! / よけろ!。 GAMES.push は、games.js より後に読み込むこと。 */
+
+GAMES.push(
+  {
+    id: 'numtouch', title: '数字タッチ!',
+    desc: '1から16まで、小さい順に全部タッチ!<br>数字の並びは全員同じ。<br>早くクリアするほど上位。<br>17秒以内に終わらなければ、押せた数で順位が決まる。',
+    lowerBetter: true, miss: 99,
+    isMiss: v => v >= 99,
+    fmt: v => v >= 99 ? '失敗' : v >= 20 ? (36 - Math.round(v)) + '個まで' : v.toFixed(2) + '秒',
+    play: playNumTouch
+  },
+  {
+    id: 'dodge', title: 'よけろ!',
+    desc: '上から降ってくる岩や板をよけ続けよう!<br>操作は「地面より下」で指を左右に動かす。<br>長く生き残るほど上位。15秒耐えればクリア。',
+    lowerBetter: false, miss: 0,
+    isMiss: v => v <= 0,
+    fmt: v => v.toFixed(2) + '秒',
+    play: playDodge
+  }
+);
+
+/* --- ミニゲーム10: 数字タッチ! --- */
+function playNumTouch(stage, round, submit) {
+  // 番号ではなく id で自分を探すので、組み込み時に番号を直さなくてよい
+  const game = GAMES.find(g => g.id === 'numtouch');
+  const N = 16, LIMIT = 17000;
+  // 全員同じ並びにするため、round.delay を種にして並べ替える
+  const rnd = seededRng(Math.round((round.delay || 3000) * 1000));
+  const nums = Array.from({ length: N }, (_, i) => i + 1);
+  for (let i = N - 1; i > 0; i--) {
+    const j = Math.floor(rnd() * (i + 1));
+    [nums[i], nums[j]] = [nums[j], nums[i]];
+  }
+
+  countdown(stage, game, round, () => {
+    stage.innerHTML =
+      `<div class="center sub" style="font-size:18px;margin:4px 0">次は <b id="next" style="color:#ffcc33;font-size:30px">1</b> ・ <b id="time">0.00</b> 秒</div>` +
+      `<div id="grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-width:440px;margin:10px auto 0;-webkit-tap-highlight-color:transparent"></div>`;
+    const grid = stage.querySelector('#grid');
+    const nextEl = stage.querySelector('#next');
+    const timeEl = stage.querySelector('#time');
+    const BG = 'rgba(255,255,255,0.1)';
+    nums.forEach(n => {
+      const c = document.createElement('div');
+      c.dataset.n = n;
+      c.textContent = n;
+      c.style.cssText = 'aspect-ratio:1;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:bold;color:#f2f4ff;border:2px solid rgba(255,255,255,0.25);border-radius:12px;user-select:none;-webkit-user-select:none;touch-action:manipulation;background:' + BG;
+      grid.appendChild(c);
+    });
+
+    const t0 = performance.now();
+    let next = 1, done = false, iv = null;
+    const finish = v => {
+      if (done) return;
+      done = true;
+      clearInterval(iv);
+      submit(v);
+    };
+
+    grid.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      const c = ev.target.closest('[data-n]');
+      if (done || !c) return;
+      const n = +c.dataset.n;
+      if (n < next) return;                     // 押し終わったマスは無視
+      if (n === next) {
+        c.style.opacity = '0.18';
+        next++;
+        if (next > N) {
+          nextEl.textContent = '✓';
+          const sec = Math.round((performance.now() - t0) / 10) / 100;
+          timeEl.textContent = sec.toFixed(2);
+          finish(sec);
+        } else {
+          nextEl.textContent = next;
+        }
+      } else {                                  // まちがい:赤く光るだけ
+        c.style.background = 'rgba(255,90,90,0.55)';
+        timers.push(setTimeout(() => { c.style.background = BG; }, 150));
+      }
+    });
+
+    iv = setInterval(() => {
+      const e = performance.now() - t0;
+      if (!done) timeEl.textContent = (e / 1000).toFixed(2);
+      if (e >= LIMIT && !done) {
+        const got = next - 1;                   // 押せた数
+        finish(got === 0 ? 99 : 20 + (N - got)); // 20以上=未クリア(多く押せた方が上位)、0個は失敗
+      }
+    }, 30);
+    timers.push(iv);
+  });
+}
+
+/* --- ミニゲーム11: よけろ! --- */
+function playDodge(stage, round, submit) {
+  // 番号ではなく id で自分を探すので、組み込み時に番号を直さなくてよい
+  const game = GAMES.find(g => g.id === 'dodge');
+  const C = dodgeCfg();
+  // 全員同じ落ち方にするため、round.delay を種にして落とす物を決める
+  const objs = dodgeMake(Math.round((round.delay || 3000) * 1000));
+
+  countdown(stage, game, round, () => {
+    stage.innerHTML =
+      `<div class="center sub" id="top" style="font-size:18px;margin:4px 0">生き残り <b id="t" style="color:#ffcc33;font-size:26px">0.00</b> 秒</div>` +
+      `<canvas id="pad" style="display:block;width:100%;height:68vh;margin-top:4px;touch-action:none"></canvas>`;
+    const cv = stage.querySelector('#pad');
+    const top = stage.querySelector('#top');
+    const tEl = stage.querySelector('#t');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = cv.getBoundingClientRect();
+    const W = rect.width, H = rect.height;
+    cv.width = W * dpr; cv.height = H * dpr;
+    const ctx = cv.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    // 世界(幅1・高さ WH)を画面に収める。どの機種でも同じ広さ。地面より下は指の操作エリア
+    const s = Math.min(W, H * 0.62 / C.WH);
+    const ox = (W - s) / 2, gy = s * C.WH;
+    const X = x => ox + x * s;
+
+    let px = 0.5, tx = 0.5, pid = null, touching = false, done = false, dead = false;
+    let sim = 0, iv = null;
+
+    const draw = e => {
+      ctx.clearRect(0, 0, W, H);
+      // 世界
+      ctx.fillStyle = 'rgba(255,255,255,0.04)';
+      ctx.fillRect(ox, 0, s, gy);
+      // 操作エリア
+      ctx.fillStyle = 'rgba(255,204,51,0.07)';
+      ctx.fillRect(0, gy, W, H - gy);
+      ctx.strokeStyle = '#ffcc33'; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
+      ctx.fillStyle = 'rgba(242,244,255,0.55)';
+      ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('▼ ここで指を左右に動かす ▼', W / 2, gy + (H - gy) * 0.72);
+      if (touching) {
+        ctx.fillStyle = 'rgba(255,204,51,0.55)';
+        ctx.beginPath(); ctx.arc(X(tx), gy + (H - gy) * 0.3, 15, 0, Math.PI * 2); ctx.fill();
+      }
+      // 降ってくる物(世界の外にははみ出さない)
+      ctx.save();
+      ctx.beginPath(); ctx.rect(ox, 0, s, gy); ctx.clip();
+      for (let i = 0; i < objs.length; i++) {
+        const o = objs[i], age = e - o.t;
+        if (age < 0) break;
+        const y = -o.h + o.vy * age;
+        if (y > C.WH) continue;
+        const cx = o.x + o.vx * age;
+        if (o.plank) {
+          ctx.fillStyle = '#d98a6a';
+          ctx.fillRect(X(cx - o.w / 2), (y) * s, o.w * s, o.h * s);
+        } else {
+          ctx.fillStyle = '#9aa6d6';
+          ctx.beginPath(); ctx.arc(X(cx), (y + o.h / 2) * s, o.w / 2 * s, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = 'rgba(255,255,255,0.35)';
+          ctx.beginPath(); ctx.arc(X(cx) - o.w * s * 0.14, (y + o.h / 2) * s - o.w * s * 0.14, o.w * s * 0.12, 0, Math.PI * 2); ctx.fill();
+        }
+      }
+      ctx.restore();
+      // 自分
+      const bw = C.PW * 2 * s, bh = C.PH * s;
+      ctx.fillStyle = dead ? '#ff6b6b' : '#ffcc33';
+      ctx.fillRect(X(px) - bw / 2, gy - bh, bw, bh);
+      ctx.fillStyle = '#1a1f3a';
+      ctx.fillRect(X(px) - bw * 0.27, gy - bh * 0.72, bw * 0.16, bh * 0.2);
+      ctx.fillRect(X(px) + bw * 0.11, gy - bh * 0.72, bw * 0.16, bh * 0.2);
+    };
+
+    const end = (t, hit) => {
+      if (done) return;
+      done = true; dead = hit;
+      clearInterval(iv);
+      const v = Math.max(0.01, Math.round(t * 100) / 100);
+      tEl.textContent = v.toFixed(2);
+      top.innerHTML = (hit ? 'ヒット! ' : 'クリア! ') + '生き残り <b style="color:#ffcc33;font-size:26px">' + v.toFixed(2) + '</b> 秒';
+      draw(t);
+      submit(v);
+    };
+
+    const pos = ev => {
+      const b = cv.getBoundingClientRect();
+      return { x: ev.clientX - b.left, y: ev.clientY - b.top };
+    };
+    const toTx = p => Math.max(0.05, Math.min(0.95, (p.x - ox) / s));
+    cv.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      if (done || pid !== null) return;
+      const p = pos(ev);
+      if (p.y < gy) return;                     // 地面より上では操作できない
+      pid = ev.pointerId; touching = true; tx = toTx(p);
+      try { cv.setPointerCapture(pid); } catch (e) {}
+    });
+    cv.addEventListener('pointermove', ev => {
+      if (done || ev.pointerId !== pid) return;
+      ev.preventDefault();
+      tx = toTx(pos(ev));
+    });
+    const release = ev => {
+      if (ev.pointerId !== pid) return;
+      pid = null; touching = false;
+    };
+    cv.addEventListener('pointerup', release);
+    cv.addEventListener('pointercancel', release);
+
+    const t0 = performance.now();
+    draw(0);
+    iv = setInterval(() => {
+      if (done) return;
+      const e = (performance.now() - t0) / 1000;
+      // 処理が遅れても、すり抜けないように細かく区切って進める
+      while (sim < e && !done) {
+        const step = Math.min(0.016, e - sim);
+        sim += step;
+        const d = tx - px, mv = C.VMAX * step;
+        px += Math.abs(d) <= mv ? d : Math.sign(d) * mv;
+        if (dodgeHit(objs, sim, px)) { end(sim, true); return; }
+        if (sim >= C.DUR) { end(C.DUR, false); return; }
+      }
+      tEl.textContent = sim.toFixed(2);
+      draw(sim);
+    }, 16);
+    timers.push(iv);
+  });
+}
+
+// 難しさの設定(ここを変えると難しさが変わる)
+function dodgeCfg() {
+  return {
+    WH: 0.95,     // 世界の高さ(幅を1とする)
+    PW: 0.045,    // 自分の半分の幅
+    PH: 0.09,     // 自分の高さ
+    VMAX: 2.6,    // 自分の最高速度(幅/秒)
+    DUR: 15       // クリアまでの秒数
+  };
+}
+
+// 落ちてくる物を、出る時間順に最初に全部決めておく(時間が進むほど多く・速く)
+function dodgeMake(seed) {
+  const C = dodgeCfg(), rnd = seededRng(seed), objs = [];
+  let t = 0.7;
+  while (t < C.DUR + 0.5) {
+    const d = Math.min(1, t / 12);
+    const plank = rnd() < 0.22;
+    const w = plank ? 0.2 + rnd() * 0.14 : 0.07 + rnd() * 0.05;
+    objs.push({
+      t, plank, w, h: plank ? 0.045 : w,
+      x: 0.05 + rnd() * 0.9,
+      vy: (0.62 + rnd() * 0.25) * (1 + 0.45 * d),
+      vx: (rnd() - 0.5) * 0.28 * d
+    });
+    t += (0.62 - 0.42 * d) * (0.7 + rnd() * 0.6);
+  }
+  return objs;
+}
+
+// 時間 e に、位置 px の自分が何かに当たっているか
+function dodgeHit(objs, e, px) {
+  const C = dodgeCfg();
+  const pl = px - C.PW + 0.012, pr = px + C.PW - 0.012, pt = C.WH - C.PH + 0.012;
+  for (let i = 0; i < objs.length; i++) {
+    const o = objs[i], age = e - o.t;
+    if (age < 0) break;                          // 出る順に並んでいるので、以降はまだ出ていない
+    const y = -o.h + o.vy * age;
+    if (y > C.WH) continue;
+    const k = o.plank ? 0.96 : 0.85;             // 当たり判定は見た目より少し小さめ
+    const hw = o.w / 2 * k, hh = o.h / 2 * k;
+    const cx = o.x + o.vx * age, cy = y + o.h / 2;
+    if (cx + hw > pl && cx - hw < pr && cy + hh > pt && cy - hh < C.WH) return true;
+  }
+  return false;
 }
