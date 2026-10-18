@@ -827,7 +827,7 @@ function playJanken(stage, round, submit) {
       `<div id="hand" style="font-size:110px;line-height:1.15"></div>` +
       `<div id="mode" style="display:inline-block;padding:6px 26px;border-radius:999px;font-size:30px;font-weight:bold"></div>` +
       `<div class="sub" id="msg" style="min-height:24px;margin-top:6px;color:#ff8a8a"></div></div>` +
-      `<div id="btns" style="display:flex;gap:10px;margin:8px auto 0;max-width:460px;-webkit-tap-highlight-color:transparent">${btn(0)}${btn(1)}${btn(2)}</div>`;
+      `<div id="btns" style="display:flex;gap:10px;margin:8px auto 0;width:100%;max-width:460px;-webkit-tap-highlight-color:transparent">${btn(0)}${btn(1)}${btn(2)}</div>`;
     const okEl = stage.querySelector('#ok');
     const left = stage.querySelector('#left');
     const handEl = stage.querySelector('#hand');
@@ -897,7 +897,7 @@ function playOddColor(stage, round, submit) {
     stage.innerHTML =
       `<div class="center sub" style="font-size:18px;margin:4px 0">正解 <b id="ok" style="color:#ffcc33;font-size:26px">0</b> 問 ・ 残り <b id="left">15.0</b> 秒</div>` +
       `<div class="center sub" id="msg" style="min-height:24px;color:#ff8a8a"></div>` +
-      `<div id="grid" style="display:grid;gap:6px;max-width:440px;margin:6px auto 0;-webkit-tap-highlight-color:transparent"></div>`;
+      `<div id="grid" style="display:grid;gap:6px;width:100%;max-width:440px;margin:6px auto 0;-webkit-tap-highlight-color:transparent"></div>`;
     const grid = stage.querySelector('#grid');
     const okEl = stage.querySelector('#ok');
     const left = stage.querySelector('#left');
@@ -1008,7 +1008,7 @@ function playNumTouch(stage, round, submit) {
   countdown(stage, game, round, () => {
     stage.innerHTML =
       `<div class="center sub" style="font-size:18px;margin:4px 0">次は <b id="next" style="color:#ffcc33;font-size:30px">1</b> ・ <b id="time">0.00</b> 秒</div>` +
-      `<div id="grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;max-width:440px;margin:10px auto 0;-webkit-tap-highlight-color:transparent"></div>`;
+      `<div id="grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;max-width:440px;margin:10px auto 0;-webkit-tap-highlight-color:transparent"></div>`;
     const grid = stage.querySelector('#grid');
     const nextEl = stage.querySelector('#next');
     const timeEl = stage.querySelector('#time');
@@ -1220,10 +1220,10 @@ function dodgeMake(seed) {
     objs.push({
       t, plank, w, h: plank ? 0.045 : w,
       x: 0.05 + rnd() * 0.9,
-      vy: (0.62 + rnd() * 0.25) * (1 + 0.45 * d),
+      vy: (0.71 + rnd() * 0.29) * (1 + 0.45 * d),   // 落ちる速さ(前より約15%速い)
       vx: (rnd() - 0.5) * 0.28 * d
     });
-    t += (0.62 - 0.42 * d) * (0.7 + rnd() * 0.6);
+    t += (0.52 - 0.35 * d) * (0.7 + rnd() * 0.6);  // 出る間隔(前より約20%短い=量が増える)
   }
   return objs;
 }
