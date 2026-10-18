@@ -39,7 +39,7 @@ input:focus{border-color:var(--blue)}
 .reactzone.wait{background:#7a2330}
 .reactzone.go{background:var(--ok);color:#06210f}
 .reactzone small{font-size:16px;font-weight:500;display:block;margin-top:8px}
-.rk{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--card2);border-radius:10px}
+.rk{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;background:var(--card2);border-radius:10px}
 .rk .rn{width:28px;font-weight:800;color:var(--accent);font-size:18px}
 .rk .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rk .val{color:var(--sub);font-size:14px}
@@ -56,6 +56,12 @@ input:focus{border-color:var(--blue)}
 .seg button:disabled{opacity:.75}
 .bonus{background:var(--accent);color:#2a1d00;font-weight:800;border-radius:10px;padding:8px 12px;text-align:center}
 .rule .bonus{margin-bottom:14px}
+.btn:disabled{opacity:.45}
+.viz{flex-basis:100%}
+.vbar{position:relative;height:10px;margin:10px 0 6px;background:rgba(255,255,255,.1);border-radius:5px}
+.vfill{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--blue)}
+.vmark{position:absolute;top:-5px;bottom:-5px;width:3px;margin-left:-1px;background:var(--accent);border-radius:2px}
+.vlabel{font-size:12px;color:var(--sub)}
 input[type=checkbox]{width:24px;height:24px;padding:0;flex:none;accent-color:var(--blue)}
 .chk{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--card2);border-radius:10px;font-size:16px;color:var(--text)}
 .chk b{display:block}
