@@ -150,7 +150,8 @@ function submit(v, x) {
 }
 function showSubmitted(v, x) {
   const g = gameAt(roundState.index);
-  $('#stage').innerHTML = `<div class="center"><div class="sub">あなたの記録</div><div class="big-num" style="font-size:44px">${h(g.fmt(v, x))}</div>${g.viz && x ? g.viz(v, x) : ''}</div>`;
+  $('#stage').innerHTML = `<div class="center"><div class="sub">あなたの記録</div><div class="big-num" style="font-size:44px">${h(g.fmt(v, x))}</div>${g.result && x !== undefined ? '<div class="viz" id="rbox"></div>' : (g.viz && x ? g.viz(v, x) : '')}</div>`;
+  if (g.result && x !== undefined) callResult(g, $('#rbox'), x);
   updateWaiting();
 }
 function updateWaiting() {
@@ -196,6 +197,7 @@ function renderRoundResult() {
   const gi = room.round.index, g = gameAt(gi), c = room.config;
   const solo = c.mode === 'solo', m = multAt(gi);
   const list = rankGame(gi), st = solo ? [] : standing(gi);
+  const hasRes = p => !!g.result && p.x !== undefined && p.v !== null;
   const isAdmin = room.admin === pid, last = gi >= c.rounds - 1;
   const title = solo ? g.title : 'ラウンド ' + (gi + 1) + '/' + c.rounds + ' ' + g.title;
   let actions;
@@ -206,13 +208,15 @@ function renderRoundResult() {
     <h1>${h(title)} の結果</h1>
     ${m > 1 ? `<div class="bonus">${bonusLabel(gi)} ポイント2倍</div>` : ''}
     <div class="card">
-      ${list.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (あなた)' : ''}</span><span class="val">${p.v === null ? '未提出' : h(g.fmt(p.v, p.x))}</span>${solo ? '' : `<span class="pt">+${p.pts}</span>`}${(g.viz && p.x !== undefined && p.v !== null) ? `<div class="viz">${g.viz(p.v, p.x)}</div>` : ''}</div>`).join('')}
+      ${list.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (あなた)' : ''}</span><span class="val">${p.v === null ? '未提出' : h(g.fmt(p.v, p.x))}</span>${solo ? '' : `<span class="pt">+${p.pts}</span>`}${hasRes(p) ? '<div class="viz" data-rp></div>' : ((g.viz && p.x !== undefined && p.v !== null) ? `<div class="viz">${g.viz(p.v, p.x)}</div>` : '')}</div>`).join('')}
     </div>
     ${solo ? '' : `<div class="card">
       <div class="sub">ここまでの合計</div>
       ${st.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (あなた)' : ''}</span><span class="tot">${p.total}</span></div>`).join('')}
     </div>`}
     ${actions}`);
+  const boxes = document.querySelectorAll('[data-rp]');
+  list.filter(hasRes).forEach((p, i) => { if (boxes[i]) callResult(g, boxes[i], p.x); });
   if (isAdmin && solo) {
     $('#again1').onclick = guarded(() => startRound(0));
     $('#tolobby').onclick = guarded(toLobby);
