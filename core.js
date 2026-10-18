@@ -28,7 +28,7 @@ let viewKey = '', roundState = null, timers = [], busy = false;
 const serverNow = () => Date.now() + offset;
 const getRes = i => (room && room.results && room.results['g' + i]) || {};
 /* game.result(要素, データ) があるゲームだけ、結果の欄に絵を描かせる。失敗してもその画面は壊さない */
-const callResult = (g, el, data) => { try { g.result(el, data); } catch (e) { console.error(e); } };
+const callResult = (g, el, data, size) => { try { g.result(el, data, size); } catch (e) { console.error(e); } };
 const getExtra = i => (room && room.extras && room.extras['g' + i]) || {};
 /* 結果画面が出た直後0.7秒は、ボタンを押しても動かない(指が触れたままの誤タップ対策) */
 let guardUntil = 0;
@@ -71,7 +71,7 @@ function init() {
 /* ---------- ホーム ---------- */
 function renderHome(msg) {
   setApp(`
-    <h1>🎮 ミニゲームバトル</h1>
+    <h1>🎮 PartyArcade</h1>
     <div class="card">
       <label>なまえ</label>
       <input id="name" maxlength="10" placeholder="なまえを入力" value="${h(myName)}">
@@ -93,17 +93,56 @@ function renderHome(msg) {
   $('#practice').onclick = renderPractice;
 }
 
+/* ---------- ゲーム選択(ドラムロール) ----------
+   ゲーム名の縦リストを指で回して、真ん中に来たものを選ぶ。ソロゲームの設定と練習モードで使う。 */
+const PICK_H = 46; // 1行の高さ(CSSの .pick-item と同じ)
+function pickerHtml(id, selId, enabled) {
+  const idx = Math.max(0, GAMES.findIndex(g => g.id === selId)), pad = PICK_H * 2;
+  return `<div class="pick"><div class="pick-win"></div>
+    <div class="pick-list${enabled ? '' : ' off'}" id="${id}" data-sel="${idx}">
+      <div style="height:${pad}px"></div>${GAMES.map((g, i) => `<div class="pick-item" data-i="${i}">${h(g.title)}</div>`).join('')}<div style="height:${pad}px"></div>
+    </div></div>
+    <div class="sub pick-desc" id="${id}-d"></div>`;
+}
+/* onPick(ゲームのid) は、指を止めて少したってから呼ばれる */
+function pickerInit(id, onPick) {
+  const el = $('#' + id), desc = $('#' + id + '-d'); if (!el) return;
+  const items = el.querySelectorAll('.pick-item');
+  const clamp = i => Math.max(0, Math.min(GAMES.length - 1, i));
+  let cur = clamp(+el.dataset.sel), t = null;
+  const mark = i => {
+    items.forEach((it, k) => it.classList.toggle('on', k === i));
+    if (desc) desc.innerHTML = GAMES[i].descBase || GAMES[i].desc;
+  };
+  el.scrollTop = cur * PICK_H;
+  mark(cur);
+  if (el.classList.contains('off')) return;
+  el.addEventListener('scroll', () => {
+    const i = clamp(Math.round(el.scrollTop / PICK_H));
+    mark(i);
+    clearTimeout(t);
+    t = setTimeout(() => { if (i !== cur) { cur = i; onPick(GAMES[i].id); } }, 180);
+  });
+  el.addEventListener('click', ev => {
+    const it = ev.target.closest('.pick-item');
+    if (it) el.scrollTo({ top: +it.dataset.i * PICK_H, behavior: 'smooth' });
+  });
+}
+
 /* ---------- 練習モード(ルームの外・1人用) ---------- */
+let practiceSel = GAMES[0].id; // 選んでいるゲーム(練習モードを出入りしても覚えている)
 function renderPractice() {
   clearTimers();
   setApp(`
     <h1>練習モード</h1>
     <div class="card">
-      <div class="sub">遊ぶゲームを選ぶ(記録は保存されない)</div>
-      ${GAMES.map(g => `<button class="btn sub" data-pg="${h(g.id)}">${h(g.title)}</button>`).join('')}
+      <div class="sub">遊ぶゲームを回して選ぶ(記録は保存されない)</div>
+      ${pickerHtml('pp', practiceSel, true)}
+      <button class="btn" id="go">このゲームで遊ぶ</button>
     </div>
     <button class="btn ghost" id="back">ホームに戻る</button>`);
-  document.querySelectorAll('[data-pg]').forEach(b => { b.onclick = () => startPractice(b.dataset.pg); });
+  pickerInit('pp', id => { practiceSel = id; });
+  $('#go').onclick = () => startPractice(practiceSel);
   $('#back').onclick = () => renderHome();
 }
 function startPractice(id) {
@@ -116,6 +155,7 @@ function startPractice(id) {
     <button class="btn ghost" id="quit">やめる</button>`);
   let done = false;
   $('#quit').onclick = () => { done = true; clearTimers(); renderPractice(); };
+  practiceSel = id;
   g.play($('#stage'), round, (v, x) => { if (done) return; done = true; clearTimers(); practiceResult(g, v, x); });
 }
 function practiceResult(g, v, x) {
@@ -126,7 +166,7 @@ function practiceResult(g, v, x) {
     <button class="btn" id="again">もう一度</button>
     <button class="btn sub" id="pick">ゲームを選ぶ</button>
     <button class="btn ghost" id="home">ホームに戻る</button>`);
-  if (g.result && x !== undefined) callResult(g, $('#rbox'), x);
+  if (g.result && x !== undefined) callResult(g, $('#rbox'), x, 200);
   $('#again').onclick = guarded(() => startPractice(g.id));
   $('#pick').onclick = guarded(renderPractice);
   $('#home').onclick = guarded(() => renderHome());
