@@ -959,14 +959,14 @@ function playOddColor(stage, round, submit) {
 }
 
 // i 問目の問題。種が同じなら全員同じ問題になる。
-// 最初から難しい(色の差は2.4%から始まり、1.1%まで小さくなる)。ここの数字を変えると難しさが変わる
+// 色の差は3.2%から始まり、1.6%まで小さくなる。ここの数字を変えると難しさが変わる
 function oddcolorQuestion(seed, i) {
   const r = seededRng(seed * 31 + i * 7919 + 1);
   const size = i < 3 ? 5 : i < 7 ? 6 : 7;        // 5x5 → 6x6 → 7x7
   const hue = Math.floor(r() * 360);
   const s = 50 + Math.floor(r() * 25);
   const l = 46 + Math.floor(r() * 14);
-  const delta = Math.max(1.1, 2.4 - i * 0.12);   // 明るさの差(%)
+  const delta = Math.max(1.6, 3.2 - i * 0.12);   // 明るさの差(%)
   const odd = Math.floor(r() * size * size);
   const sign = r() < 0.5 ? -1 : 1;
   return { size, hue, s, l, delta, odd, sign };
