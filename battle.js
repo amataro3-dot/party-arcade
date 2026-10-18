@@ -109,7 +109,7 @@ function startRound(i, cfg) {
     round: { index: i, startAt: serverNow() + COUNTDOWN_MS, delay: 2000 + Math.floor(Math.random() * 3000) }
   };
   if (cfg) upd.config = cfg;
-  if (i === 0) upd.results = null;
+  if (i === 0) { upd.results = null; upd.extras = null; }
   db.ref('minigame-rooms/' + roomId).update(upd);
 }
 
@@ -133,21 +133,24 @@ function buildPlay() {
     <div id="stage" class="stage"></div>
     <div id="wait" class="center sub"></div>`);
   const mine = getRes(r.index)[pid];
-  if (mine !== undefined && mine !== null) { roundState.submitted = true; showSubmitted(mine); return; }
+  if (mine !== undefined && mine !== null) { roundState.submitted = true; showSubmitted(mine, getExtra(r.index)[pid]); return; }
   if (serverNow() - r.startAt > 1500) { submit(g.miss); return; } // 途中復帰は不参加扱い
   g.play($('#stage'), r, submit);
 }
 
-function submit(v) {
+/* v = 順位を決める数値。x = 結果の表示に使う補足(線の長さなど。なくてもよい) */
+function submit(v, x) {
   if (!roundState || roundState.submitted) return;
   roundState.submitted = true;
   clearTimers();
-  db.ref('minigame-rooms/' + roomId + '/results/g' + roundState.index + '/' + pid).set(v);
-  showSubmitted(v);
+  const base = 'minigame-rooms/' + roomId;
+  if (x !== undefined) db.ref(base + '/extras/g' + roundState.index + '/' + pid).set(x);
+  db.ref(base + '/results/g' + roundState.index + '/' + pid).set(v);
+  showSubmitted(v, x);
 }
-function showSubmitted(v) {
+function showSubmitted(v, x) {
   const g = gameAt(roundState.index);
-  $('#stage').innerHTML = `<div class="center"><div class="sub">あなたの記録</div><div class="big-num" style="font-size:44px">${h(g.fmt(v))}</div></div>`;
+  $('#stage').innerHTML = `<div class="center"><div class="sub">あなたの記録</div><div class="big-num" style="font-size:44px">${h(g.fmt(v, x))}</div>${g.viz && x ? g.viz(v, x) : ''}</div>`;
   updateWaiting();
 }
 function updateWaiting() {
@@ -160,9 +163,9 @@ function updateWaiting() {
 
 /* ---------- 集計 ---------- */
 function rankGame(gi) {
-  const g = gameAt(gi), res = getRes(gi);
+  const g = gameAt(gi), res = getRes(gi), ex = getExtra(gi);
   const list = Object.keys(room.players).map(id => ({
-    id, name: room.players[id].name, v: res[id] === undefined ? null : res[id]
+    id, name: room.players[id].name, v: res[id] === undefined ? null : res[id], x: ex[id]
   }));
   const better = (a, b) => a.v !== null && (b.v === null || (g.lowerBetter ? a.v < b.v : a.v > b.v));
   list.forEach(p => {
@@ -186,7 +189,7 @@ function standing(upTo) {
 
 /* ---------- 結果 ---------- */
 function toLobby() {
-  db.ref('minigame-rooms/' + roomId).update({ phase: 'lobby', results: null, round: null, config: null });
+  db.ref('minigame-rooms/' + roomId).update({ phase: 'lobby', results: null, extras: null, round: null, config: null });
 }
 
 function renderRoundResult() {
@@ -203,7 +206,7 @@ function renderRoundResult() {
     <h1>${h(title)} の結果</h1>
     ${m > 1 ? `<div class="bonus">${bonusLabel(gi)} ポイント2倍</div>` : ''}
     <div class="card">
-      ${list.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (あなた)' : ''}</span><span class="val">${p.v === null ? '未提出' : h(g.fmt(p.v))}</span>${solo ? '' : `<span class="pt">+${p.pts}</span>`}</div>`).join('')}
+      ${list.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (あなた)' : ''}</span><span class="val">${p.v === null ? '未提出' : h(g.fmt(p.v, p.x))}</span>${solo ? '' : `<span class="pt">+${p.pts}</span>`}${(g.viz && p.x !== undefined && p.v !== null) ? `<div class="viz">${g.viz(p.v, p.x)}</div>` : ''}</div>`).join('')}
     </div>
     ${solo ? '' : `<div class="card">
       <div class="sub">ここまでの合計</div>
@@ -211,13 +214,13 @@ function renderRoundResult() {
     </div>`}
     ${actions}`);
   if (isAdmin && solo) {
-    $('#again1').onclick = () => startRound(0);
-    $('#tolobby').onclick = toLobby;
+    $('#again1').onclick = guarded(() => startRound(0));
+    $('#tolobby').onclick = guarded(toLobby);
   } else if (isAdmin) {
-    $('#next').onclick = () => {
+    $('#next').onclick = guarded(() => {
       if (last) db.ref('minigame-rooms/' + roomId + '/phase').set('final');
       else startRound(gi + 1);
-    };
+    });
   }
 }
 
@@ -235,8 +238,8 @@ function renderFinal() {
     ${(c.doubleUp || c.finalUp) ? '<div class="center sub">★ = ポイント2倍のラウンド</div>' : ''}
     ${isAdmin ? '<button class="btn" id="again">ロビーに戻る(もう一度)</button>' : '<div class="center sub">管理者の操作を待っています…</div>'}
     <button class="btn ghost" id="leave">${leaveLabel()}</button>`);
-  $('#leave').onclick = leaveRoom;
-  if (isAdmin) $('#again').onclick = toLobby;
+  $('#leave').onclick = guarded(leaveRoom);
+  if (isAdmin) $('#again').onclick = guarded(toLobby);
 }
 
 init();
