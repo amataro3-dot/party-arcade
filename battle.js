@@ -36,7 +36,7 @@ function settingsCard() {
   let body;
   if (st.mode === 'solo') {
     body = `<div class="sub">選んだゲームを1回だけ遊ぶ。ポイントは付かない。</div>
-      <div class="sub">ゲーム</div>${seg('soloGame', GAMES.map(g => [g.id, g.title]), st.soloGame)}`;
+      <div class="sub">ゲーム${isAdmin ? '(回して選ぶ)' : ''}</div>${pickerHtml('sp', st.soloGame, isAdmin)}`;
   } else {
     body = `<div class="sub">ランダムなゲームを続けて遊び、合計ポイントで優勝を決める。</div>
       <div class="sub">ラウンド数</div>${seg('rounds', [4, 5, 6, 7, 8].map(n => [n, String(n)]), st.rounds, 'num')}
@@ -90,6 +90,7 @@ function renderLobby() {
   $('#leave').onclick = leaveRoom;
   if (isAdmin) $('#start').onclick = startGame;
   document.querySelectorAll('[data-set]').forEach(b => { b.onclick = () => setSetting(b.dataset.set, b.dataset.v); });
+  if ($('#sp')) pickerInit('sp', id => setSetting('soloGame', id));
   document.querySelectorAll('[data-chk]').forEach(i => { i.onchange = () => setSetting(i.dataset.chk, i.checked); });
   document.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => playerAction(b.dataset.act, b.dataset.id); });
 }
@@ -151,7 +152,7 @@ function submit(v, x) {
 function showSubmitted(v, x) {
   const g = gameAt(roundState.index);
   $('#stage').innerHTML = `<div class="center"><div class="sub">あなたの記録</div><div class="big-num" style="font-size:44px">${h(g.fmt(v, x))}</div>${g.result && x !== undefined ? '<div class="viz" id="rbox"></div>' : (g.viz && x ? g.viz(v, x) : '')}</div>`;
-  if (g.result && x !== undefined) callResult(g, $('#rbox'), x);
+  if (g.result && x !== undefined) callResult(g, $('#rbox'), x, 200);
   updateWaiting();
 }
 function updateWaiting() {
