@@ -129,6 +129,13 @@ function pickerInit(id, onPick) {
   });
 }
 
+/* いま真ん中にあるゲームのid(回した直後でも、保存を待たずに読める)。見るだけの欄は null */
+function pickerValue(id) {
+  const el = $('#' + id);
+  if (!el || typeof el.scrollTop !== 'number' || el.classList.contains('off')) return null;
+  return GAMES[Math.max(0, Math.min(GAMES.length - 1, Math.round(el.scrollTop / PICK_H)))].id;
+}
+
 /* ---------- 練習モード(ルームの外・1人用) ---------- */
 let practiceSel = GAMES[0].id; // 選んでいるゲーム(練習モードを出入りしても覚えている)
 function renderPractice() {
