@@ -57,7 +57,11 @@ function startGame() {
   const st = settings();
   let cfg;
   if (st.mode === 'solo') {
-    const id = GAMES.some(g => g.id === st.soloGame) ? st.soloGame : GAMES[0].id;
+    // 回した直後にスタートを押しても、画面で選んでいるゲームが始まるようにする
+    const shown = pickerValue('sp');
+    const want = shown || st.soloGame;
+    const id = GAMES.some(g => g.id === want) ? want : GAMES[0].id;
+    if (id !== st.soloGame) setSetting('soloGame', id);
     cfg = { mode: 'solo', rounds: 1, doubleUp: false, finalUp: false, doubleRound: -1, playlist: [id] };
   } else {
     const n = Math.min(8, Math.max(4, Number(st.rounds) || 4));
