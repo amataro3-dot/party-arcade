@@ -45,6 +45,17 @@ const GAMES = [
       return `<div class="vbar"><div class="vfill" style="width:${pct(cm)}%"></div><div class="vmark" style="left:${pct(t)}%"></div></div><div class="vlabel">描いた線 ${cm.toFixed(2)}cm ・ お題 ${t}cm</div>`;
     },
     play: playDrawCm
+  },
+  {
+    id: 'cut', title: 'キレイに切って!',
+    descBase: '真ん中の点から円の外までドラッグして切ろう!<br>離すと線が残る。「1つ戻る」でやり直せる。<br>お題の数だけ切ったら終了。<br>1切れずつの大きさがそろうほど上位。',
+    desc: '真ん中の点から円の外までドラッグして切ろう!<br>離すと線が残る。「1つ戻る」でやり直せる。<br>お題の数だけ切ったら終了。<br>1切れずつの大きさがそろうほど上位。',
+    lowerBetter: true, miss: 99,
+    isMiss: v => v >= 99,
+    fmt: v => v >= 99 ? '失敗' : 'ズレ ' + v.toFixed(2) + '%',
+    play: playCut,
+    // リザルト用:その人の切った円を el の中に描く(data は submit の2つ目で送ったもの)
+    result: drawCutResult
   }
 ];
 
@@ -224,4 +235,176 @@ function playDrawCm(stage, round, submit) {
     }, 50);
     timers.push(iv);
   });
+}
+
+/* --- ミニゲーム5: キレイに切って! --- */
+function playCut(stage, round, submit) {
+  // 番号ではなく id で自分を探すので、組み込み時に番号を直さなくてよい
+  const game = GAMES.find(g => g.id === 'cut');
+  // 全員共通の round.delay からお題を決める → 3〜9等分
+  const N = 3 + (Math.floor(round.delay) % 7);
+
+  // カウントダウン中(5秒)にお題を見せる
+  game.desc = game.descBase +
+    `<div style="margin-top:14px;font-size:22px">お題 <b style="color:#ffcc33">${N}等分</b></div>`;
+
+  countdown(stage, game, round, () => {
+    stage.innerHTML =
+      `<div class="center" style="font-size:22px;margin:6px 0"><b style="color:#ffcc33">${N}等分</b>に切って!</div>` +
+      `<div class="center sub" id="info">あと <b id="rest">${N}</b> 本 ・ 残り <b id="left">15.0</b> 秒</div>` +
+      `<canvas id="pad" style="display:block;width:100%;height:50vh;margin-top:8px;touch-action:none"></canvas>` +
+      `<div class="center"><button class="btn" id="undo" style="margin-top:8px;min-width:150px">↶ 1つ戻る</button></div>`;
+
+    const cv = stage.querySelector('#pad');
+    const info = stage.querySelector('#info');
+    const undoBtn = stage.querySelector('#undo');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = cv.getBoundingClientRect();
+    const W = rect.width, H = rect.height;
+    cv.width = W * dpr; cv.height = H * dpr;
+    const ctx = cv.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const cx = W / 2, cy = H / 2;
+    const R = Math.min(W, H) * 0.42;         // 円の半径
+    const HIT = Math.max(30, R * 0.2);       // 真ん中の点をつかめる範囲
+    const DUR = 15000, t0 = performance.now();
+    const cuts = [];                          // 切った角度(ラジアン)
+    let drag = null, pid = null, done = false, iv = null;
+
+    const pos = ev => {
+      const b = cv.getBoundingClientRect();
+      return { x: ev.clientX - b.left, y: ev.clientY - b.top };
+    };
+    const dist = p => Math.hypot(p.x - cx, p.y - cy);
+
+    const updateUI = () => {
+      const rest = stage.querySelector('#rest');
+      if (rest) rest.textContent = N - cuts.length;
+      undoBtn.style.opacity = (cuts.length && !done) ? '1' : '0.35';
+    };
+
+    const draw = withLabels => {
+      ctx.clearRect(0, 0, W, H);
+      drawCutCircle(ctx, cx, cy, R, cuts, withLabels ? N : 0);
+      // ドラッグ中の線(円の外に出たら黄色)
+      if (drag) {
+        ctx.strokeStyle = dist(drag) > R ? '#ffcc33' : 'rgba(242,244,255,0.5)';
+        ctx.lineWidth = 4; ctx.setLineDash([8, 6]);
+        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(drag.x, drag.y); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    };
+
+    // 結果送信。2つ目は切った角度(度・小数1桁)。リザルトで全員の円を描くのに使う
+    const finish = v => {
+      if (done) return;
+      done = true;
+      clearInterval(iv);
+      updateUI();
+      submit(v, { n: N, cuts: cuts.map(a => Math.round(a * 1800 / Math.PI) / 10) });
+    };
+
+    const judge = () => {
+      const dev = cutDeviation(cuts, N);
+      draw(true);
+      info.innerHTML = `平均のズレ <b style="color:#ffcc33">${dev.toFixed(2)}%</b>`;
+      finish(dev);
+    };
+
+    undoBtn.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      if (done || drag || !cuts.length) return;
+      cuts.pop();
+      updateUI(); draw();
+    });
+
+    cv.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      if (done || drag) return;
+      const p = pos(ev);
+      if (dist(p) > HIT) return;               // 真ん中の点から始めたときだけ
+      drag = p; pid = ev.pointerId;
+      try { cv.setPointerCapture(pid); } catch (e) {}
+      draw();
+    });
+    cv.addEventListener('pointermove', ev => {
+      if (done || !drag || ev.pointerId !== pid) return;
+      ev.preventDefault();
+      drag = pos(ev);
+      draw();
+    });
+    cv.addEventListener('pointerup', ev => {
+      if (done || !drag || ev.pointerId !== pid) return;
+      const p = pos(ev);
+      drag = null;
+      if (dist(p) > R) cuts.push(Math.atan2(p.y - cy, p.x - cx)); // 円の外で離したら1本確定
+      updateUI(); draw();
+      if (cuts.length >= N) judge();
+    });
+    cv.addEventListener('pointercancel', ev => {
+      if (done || ev.pointerId !== pid) return;
+      drag = null; draw();
+    });
+
+    updateUI(); draw();
+    iv = setInterval(() => {
+      const e = performance.now() - t0;
+      const left = stage.querySelector('#left');
+      if (!done && left) left.textContent = Math.max(0, (DUR - e) / 1000).toFixed(1);
+      if (e >= DUR && !done) { drag = null; draw(); finish(99); } // 時間内に切り終わらなければ失敗
+    }, 50);
+    timers.push(iv);
+  });
+}
+
+// 平均のズレ(%)を計算する
+function cutDeviation(cuts, N) {
+  const s = cuts.map(a => (a % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2)).sort((a, b) => a - b);
+  let sum = 0;
+  s.forEach((a, i) => {
+    const b = i + 1 < s.length ? s[i + 1] : s[0] + Math.PI * 2;
+    sum += Math.abs((b - a) / (Math.PI * 2) - 1 / N);
+  });
+  return Math.round(sum / N * 100 * 100) / 100;
+}
+
+// 円と切った線を描く。labelN を渡すと各切れの割合も書く(プレイ画面とリザルトで共用)
+function drawCutCircle(ctx, cx, cy, R, cuts, labelN) {
+  ctx.fillStyle = 'rgba(255,204,51,0.15)';
+  ctx.strokeStyle = '#f2f4ff'; ctx.lineWidth = Math.max(2, R / 50);
+  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.lineWidth = Math.max(2, R / 35); ctx.lineCap = 'round';
+  cuts.forEach(a => {
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); ctx.stroke();
+  });
+  if (labelN && cuts.length) {
+    const s = cuts.map(a => (a % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2)).sort((a, b) => a - b);
+    ctx.fillStyle = '#ffcc33';
+    ctx.font = `bold ${Math.max(10, Math.round(R / 9))}px sans-serif`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    s.forEach((a, i) => {
+      const b = i + 1 < s.length ? s[i + 1] : s[0] + Math.PI * 2;
+      const m = (a + b) / 2;
+      ctx.fillText(((b - a) / (Math.PI * 2) * 100).toFixed(1) + '%', cx + Math.cos(m) * R * 0.64, cy + Math.sin(m) * R * 0.64);
+    });
+  }
+  ctx.fillStyle = '#ffcc33';
+  ctx.beginPath(); ctx.arc(cx, cy, Math.max(3, R / 14), 0, Math.PI * 2); ctx.fill();
+}
+
+// リザルト用:el(div など)の中に、その人の切った円を小さく描く
+function drawCutResult(el, data, size) {
+  size = size || 90;
+  const dpr = window.devicePixelRatio || 1;
+  const cv = document.createElement('canvas');
+  cv.width = size * dpr; cv.height = size * dpr;
+  cv.style.width = size + 'px'; cv.style.height = size + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const raw = data && data.cuts ? data.cuts : [];
+  const cuts = (Array.isArray(raw) ? raw : Object.values(raw)).map(d => d * Math.PI / 180);
+  drawCutCircle(ctx, size / 2, size / 2, size * 0.46, cuts, 0);
+  el.appendChild(cv);
 }
