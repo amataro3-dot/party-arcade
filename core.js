@@ -15,7 +15,7 @@ const firebaseConfig = {
 
 const MAX_PLAYERS = 8;
 const POINTS = [10, 8, 6, 5, 4, 3, 2, 1]; // 順位ポイント
-const COUNTDOWN_MS = 6000;
+const COUNTDOWN_MS = 5000;
 const $ = s => document.querySelector(s);
 const $app = document.getElementById('app');
 const h = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -27,6 +27,10 @@ let viewKey = '', roundState = null, timers = [], busy = false;
 
 const serverNow = () => Date.now() + offset;
 const getRes = i => (room && room.results && room.results['g' + i]) || {};
+const getExtra = i => (room && room.extras && room.extras['g' + i]) || {};
+/* 結果画面が出た直後0.7秒は、ボタンを押しても動かない(指が触れたままの誤タップ対策) */
+let guardUntil = 0;
+const guarded = fn => () => { if (Date.now() < guardUntil) return; fn(); };
 
 function toast(t) {
   const el = $('#toast'); el.textContent = t; el.classList.add('show');
@@ -110,18 +114,19 @@ function startPractice(id) {
     <button class="btn ghost" id="quit">やめる</button>`);
   let done = false;
   $('#quit').onclick = () => { done = true; clearTimers(); renderPractice(); };
-  g.play($('#stage'), round, v => { if (done) return; done = true; clearTimers(); practiceResult(g, v); });
+  g.play($('#stage'), round, (v, x) => { if (done) return; done = true; clearTimers(); practiceResult(g, v, x); });
 }
-function practiceResult(g, v) {
+function practiceResult(g, v, x) {
+  guardUntil = Date.now() + 700;
   setApp(`
     <h1>${h(g.title)}</h1>
-    <div class="card center"><div class="sub">あなたの記録</div><div class="big-num" style="font-size:44px">${h(g.fmt(v))}</div></div>
+    <div class="card center"><div class="sub">あなたの記録</div><div class="big-num" style="font-size:44px">${h(g.fmt(v, x))}</div>${g.viz && x ? g.viz(v, x) : ''}</div>
     <button class="btn" id="again">もう一度</button>
     <button class="btn sub" id="pick">ゲームを選ぶ</button>
     <button class="btn ghost" id="home">ホームに戻る</button>`);
-  $('#again').onclick = () => startPractice(g.id);
-  $('#pick').onclick = renderPractice;
-  $('#home').onclick = () => renderHome();
+  $('#again').onclick = guarded(() => startPractice(g.id));
+  $('#pick').onclick = guarded(renderPractice);
+  $('#home').onclick = guarded(() => renderHome());
 }
 const setMsg = t => { const m = $('#msg'); if (m) m.textContent = t; };
 function getName() {
@@ -236,6 +241,7 @@ function render() {
     else updateWaiting();
     return;
   }
+  if (viewKey !== phase) guardUntil = Date.now() + 700;
   clearTimers(); viewKey = phase;
   if (phase === 'lobby') renderLobby();
   else if (phase === 'roundResult') renderRoundResult();
