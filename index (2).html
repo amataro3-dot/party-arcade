@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>PartyArcade</title>
+<style>
+:root{--bg:#0f1220;--card:#1b2036;--card2:#262d4a;--text:#f2f4ff;--sub:#9aa3c7;--accent:#ffcc33;--ok:#35d07f;--ng:#ff5c6c;--blue:#4c8dff}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;touch-action:manipulation;user-select:none;-webkit-user-select:none;overscroll-behavior:none}
+input{user-select:text;-webkit-user-select:text}
+#app{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;gap:12px;padding:16px;max-width:520px;margin:0 auto}
+h1{font-size:22px;margin:8px 0;text-align:center}
+.card{background:var(--card);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
+label,.sub{color:var(--sub);font-size:13px}
+.center{text-align:center}
+input{width:100%;font-size:18px;padding:12px;border-radius:12px;border:2px solid var(--card2);background:var(--bg);color:var(--text);outline:none}
+input:focus{border-color:var(--blue)}
+.btn{width:100%;font-size:18px;font-weight:700;padding:16px;border:none;border-radius:14px;background:var(--blue);color:#fff}
+.btn:active{transform:scale(.98);filter:brightness(.9)}
+.btn.sub{background:var(--card2);color:var(--text)}
+.btn.ghost{background:transparent;border:2px solid var(--card2);color:var(--sub);font-size:15px;padding:12px}
+.btn.big{font-size:36px;padding:40px 16px;touch-action:none}
+.msg{color:var(--ng);text-align:center;min-height:20px;font-size:14px}
+.roomid{font-size:56px;font-weight:800;letter-spacing:8px;color:var(--accent)}
+.pl{display:flex;align-items:center;gap:6px;padding:10px 12px;background:var(--card2);border-radius:10px;font-size:17px}
+.plname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mini{flex:none;padding:6px 10px;font-size:12px;font-weight:700;border:none;border-radius:8px;background:var(--card);color:var(--text)}
+.mini.ng{color:var(--ng)}
+.you{font-size:11px;color:var(--bg);background:var(--accent);border-radius:6px;padding:2px 6px;margin-left:4px}
+.top{display:flex;justify-content:space-between;color:var(--sub);font-size:14px}
+.stage{flex:1;display:flex;flex-direction:column;justify-content:center;gap:20px;min-height:60vh}
+.big-num{font-size:72px;font-weight:800;text-align:center;font-variant-numeric:tabular-nums}
+.cdnum{font-size:96px;font-weight:800;text-align:center;color:var(--accent)}
+.rule{text-align:center}
+.rule h2{font-size:28px;margin:0 0 8px}
+.rule p{color:var(--sub);font-size:16px;line-height:1.6;margin:0 0 16px}
+.reactzone{flex:1;min-height:60vh;border-radius:20px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:44px;font-weight:800;touch-action:none}
+.reactzone.wait{background:#7a2330}
+.reactzone.go{background:var(--ok);color:#06210f}
+.reactzone small{font-size:16px;font-weight:500;display:block;margin-top:8px}
+.rk{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;background:var(--card2);border-radius:10px}
+.rk .rn{width:28px;font-weight:800;color:var(--accent);font-size:18px}
+.rk .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rk .val{color:var(--sub);font-size:14px}
+.rk .pt{width:44px;text-align:right;font-weight:800;color:var(--ok)}
+.rk .tot{width:56px;text-align:right;font-weight:800;color:var(--accent);font-size:18px}
+.win{font-size:26px;font-weight:800;text-align:center;color:var(--accent);padding:8px 0}
+.detail{font-size:11px;color:var(--sub)}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#000c;color:#fff;padding:10px 18px;border-radius:20px;font-size:14px;opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.show{opacity:1}
+.seg{display:flex;flex-wrap:wrap;gap:6px}
+.seg button{flex:1 1 28%;min-width:0;padding:12px 6px;font-size:15px;font-weight:700;border:2px solid var(--card2);border-radius:12px;background:transparent;color:var(--sub)}
+.seg.num button{flex:1 1 15%}
+.seg button.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.seg button:disabled{opacity:.75}
+.bonus{background:var(--accent);color:#2a1d00;font-weight:800;border-radius:10px;padding:8px 12px;text-align:center}
+.rule .bonus{margin-bottom:14px}
+.btn:disabled{opacity:.45}
+.viz{flex-basis:100%;text-align:center}
+.vbar{position:relative;height:10px;margin:10px 0 6px;background:rgba(255,255,255,.1);border-radius:5px}
+.vfill{position:absolute;left:0;top:0;bottom:0;border-radius:5px;background:var(--blue)}
+.vmark{position:absolute;top:-5px;bottom:-5px;width:3px;margin-left:-1px;background:var(--accent);border-radius:2px}
+.vlabel{font-size:12px;color:var(--sub)}
+input[type=checkbox]{width:24px;height:24px;padding:0;flex:none;accent-color:var(--blue)}
+.chk{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--card2);border-radius:10px;font-size:16px;color:var(--text)}
+.chk b{display:block}
+.chk small{display:block;margin-top:2px;color:var(--sub);font-size:12px}
+.pick{position:relative;height:230px;background:var(--card2);border-radius:14px;overflow:hidden}
+.pick-win{position:absolute;left:8px;right:8px;top:92px;height:46px;border-top:2px solid var(--accent);border-bottom:2px solid var(--accent);background:rgba(255,204,51,.12);border-radius:10px;pointer-events:none;z-index:1}
+.pick-list{height:100%;overflow-y:auto;scroll-snap-type:y mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;touch-action:pan-y;overscroll-behavior:contain;-webkit-mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent);mask-image:linear-gradient(transparent,#000 30%,#000 70%,transparent)}
+.pick-list::-webkit-scrollbar{display:none}
+.pick-list.off{overflow:hidden;pointer-events:none}
+.pick-item{height:46px;line-height:46px;text-align:center;font-size:19px;font-weight:700;color:var(--sub);scroll-snap-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 12px}
+.pick-item.on{color:var(--text);font-size:21px}
+.pick-desc{min-height:3.6em;text-align:center;line-height:1.6}
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+</head>
+<body>
+<div id="app"></div>
+<div id="toast"></div>
+<script src="games.js?v=8"></script>
+<script src="games2.js?v=8"></script>
+<script src="core.js?v=8"></script>
+<script src="battle.js?v=8"></script>
+</body>
+</html>
