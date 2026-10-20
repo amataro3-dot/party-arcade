@@ -118,13 +118,22 @@ function startRound(i, cfg) {
   db.ref('minigame-rooms/' + roomId).update(upd);
 }
 
-/* 管理者: 全員提出 or タイムアウトで結果へ */
+/* 管理者: 全員提出してから少し待つ or タイムアウトで結果へ */
+const RESULT_WAIT_MS = 2500;   // 全員が終わってから結果画面に進むまでの時間(みんなが自分の記録を見られるように)
+let allDone = null;            // 全員が終わった時刻 { key: ラウンドの目印, t: 時刻 }
 function adminCheck() {
-  if (!room || room.admin !== pid || room.phase !== 'playing' || !room.round) return;
+  if (!room || room.admin !== pid || room.phase !== 'playing' || !room.round) { allDone = null; return; }
   const res = getRes(room.round.index);
   const n = Object.keys(room.players).length;
   const c = Object.keys(res).filter(k => room.players[k]).length;
-  if (c >= n || serverNow() > room.round.startAt + 25000) {
+  const key = room.round.index + ':' + room.round.startAt;   // 「もう一度」で同じ番号のラウンドでも区別する
+  let go = serverNow() > room.round.startAt + 25000;
+  if (c >= n) {
+    if (!allDone || allDone.key !== key) allDone = { key, t: serverNow() };
+    if (serverNow() - allDone.t >= RESULT_WAIT_MS) go = true;
+  } else allDone = null;
+  if (go) {
+    allDone = null;
     db.ref('minigame-rooms/' + roomId + '/phase').set('roundResult');
   }
 }
@@ -140,7 +149,7 @@ function buildPlay() {
   const mine = getRes(r.index)[pid];
   if (mine !== undefined && mine !== null) { roundState.submitted = true; showSubmitted(mine, getExtra(r.index)[pid]); return; }
   if (serverNow() - r.startAt > 1500) { submit(g.miss); return; } // 途中復帰は不参加扱い
-  g.play($('#stage'), r, submit);
+  g.play($('#stage'), r, withEndShow($('#stage'), submit));   // 「終了!」を1秒見せてから提出
 }
 
 /* v = 順位を決める数値。x = 結果の表示に使う補足(線の長さなど。なくてもよい) */

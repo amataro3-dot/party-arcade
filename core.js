@@ -40,6 +40,26 @@ function toast(t) {
 }
 function clearTimers() { timers.forEach(t => { clearTimeout(t); clearInterval(t); }); timers = []; }
 
+/* ゲームが終わったら「終了!」を少し見せてから、記録の画面に進む(全ゲーム共通)
+   fn は本当の提出(battle.js の submit や、練習モードの結果)。2回目以降の呼び出しは無視する */
+const END_SHOW_MS = 1000;
+function withEndShow(stage, fn) {
+  let fired = false;
+  return (v, x) => {
+    if (fired) return;
+    fired = true;
+    if (stage) {
+      stage.style.position = 'relative';
+      const ov = document.createElement('div');
+      ov.style.cssText = 'position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;background:rgba(15,18,32,0.35);touch-action:none';
+      ov.innerHTML = '<div style="font-size:56px;font-weight:800;color:#ffcc33;text-shadow:0 2px 12px #000">終了!</div>';
+      ov.addEventListener('pointerdown', ev => ev.preventDefault());   // 終わったあとの誤タップを止める
+      stage.appendChild(ov);
+    }
+    timers.push(setTimeout(() => fn(v, x), END_SHOW_MS));
+  };
+}
+
 /* ---------- 起動 ---------- */
 function init() {
   pid = localStorage.getItem('pid');
@@ -163,7 +183,8 @@ function startPractice(id) {
   let done = false;
   $('#quit').onclick = () => { done = true; clearTimers(); renderPractice(); };
   practiceSel = id;
-  g.play($('#stage'), round, (v, x) => { if (done) return; done = true; clearTimers(); practiceResult(g, v, x); });
+  const stage = $('#stage');
+  g.play(stage, round, withEndShow(stage, (v, x) => { if (done) return; done = true; clearTimers(); practiceResult(g, v, x); }));
 }
 function practiceResult(g, v, x) {
   guardUntil = Date.now() + 700;
