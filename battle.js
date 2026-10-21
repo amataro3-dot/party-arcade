@@ -161,6 +161,17 @@ function submit(v, x) {
   if (x !== undefined) db.ref(base + '/extras/g' + roundState.index + '/' + pid).set(x);
   db.ref(base + '/results/g' + roundState.index + '/' + pid).set(v);
   showSubmitted(v, x);
+  // 👑 タイトルホルダーに挑戦(ルームの記録だけ)。更新したら、自分の記録の下に出す
+  const idx = roundState.index;
+  tryRecord(gameAt(idx), v, x, room.round.startAt, () => {
+    const st = $('#stage');
+    if (!st || !roundState || roundState.index !== idx) return;
+    const d = document.createElement('div');
+    d.className = 'center';
+    d.style.cssText = 'font-size:22px;font-weight:800;color:#ffcc33;margin-top:10px';
+    d.textContent = '👑 新記録! タイトル獲得!';
+    st.appendChild(d);
+  });
 }
 function showSubmitted(v, x) {
   const g = gameAt(roundState.index);
@@ -211,6 +222,7 @@ function renderRoundResult() {
   const gi = room.round.index, g = gameAt(gi), c = room.config;
   const solo = c.mode === 'solo', m = multAt(gi);
   const list = rankGame(gi), st = solo ? [] : standing(gi);
+  const crown = id => isNewTitle(g, id, room.round.startAt) ? '<div class="viz" style="text-align:left;color:#ffcc33;font-weight:800;font-size:14px">👑 新記録! タイトル獲得!</div>' : '';
   const hasRes = p => !!g.result && p.x !== undefined && p.v !== null;
   const isAdmin = room.admin === pid, last = gi >= c.rounds - 1;
   const title = solo ? g.title : 'ラウンド ' + (gi + 1) + '/' + c.rounds + ' ' + g.title;
@@ -222,7 +234,7 @@ function renderRoundResult() {
     <h1>${h(title)} の結果</h1>
     ${m > 1 ? `<div class="bonus">${bonusLabel(gi)} ポイント2倍</div>` : ''}
     <div class="card">
-      ${list.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (あなた)' : ''}</span><span class="val">${p.v === null ? '未提出' : h(g.fmt(p.v, p.x))}</span>${solo ? '' : `<span class="pt">+${p.pts}</span>`}${hasRes(p) ? '<div class="viz" data-rp></div>' : ((g.viz && p.x !== undefined && p.v !== null) ? `<div class="viz">${g.viz(p.v, p.x)}</div>` : '')}</div>`).join('')}
+      ${list.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (あなた)' : ''}</span><span class="val">${p.v === null ? '未提出' : h(g.fmt(p.v, p.x))}</span>${solo ? '' : `<span class="pt">+${p.pts}</span>`}${crown(p.id)}${hasRes(p) ? '<div class="viz" data-rp></div>' : ((g.viz && p.x !== undefined && p.v !== null) ? `<div class="viz">${g.viz(p.v, p.x)}</div>` : '')}</div>`).join('')}
     </div>
     ${solo ? '' : `<div class="card">
       <div class="sub">ここまでの合計</div>

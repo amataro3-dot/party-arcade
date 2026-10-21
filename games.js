@@ -60,7 +60,8 @@ function seededRng(seed) {
 
 function countdown(stage, game, round, onGo) {
   const m = multAt(round.index);
-  stage.innerHTML = `<div class="rule">${m > 1 ? `<div class="bonus">${bonusLabel(round.index)} このラウンドはポイント2倍</div>` : ''}<h2>${h(game.title)}</h2><p>${game.desc}</p><div class="cdnum" id="cd"></div></div>`;
+  const title = typeof titleHtml === 'function' ? titleHtml(game) : '';   // 👑 タイトルホルダー(core.js)
+  stage.innerHTML = `<div class="rule">${m > 1 ? `<div class="bonus">${bonusLabel(round.index)} このラウンドはポイント2倍</div>` : ''}<h2>${h(game.title)}</h2><p>${game.desc}</p>${title}<div class="cdnum" id="cd"></div></div>`;
   const cd = stage.querySelector('#cd');
   const iv = setInterval(() => {
     const rem = round.startAt - serverNow();

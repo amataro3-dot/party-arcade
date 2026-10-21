@@ -1009,6 +1009,9 @@ GAMES.push(
     lowerBetter: false, miss: 0,
     isMiss: v => v < 1,
     fmt: (v, x) => v < 1 ? '0点' : Math.floor(v) + '点' + (x && typeof x.h === 'number' ? '(◎' + x.h + ' ○' + x.b + ')' : ''),
+    // タイトルホルダーは、満点(個数×2)に対する%で比べる。同じ%なら早く完成した人(小数の部分)
+    rec: (v, x) => { const n = curryLen(x); return n ? Math.round(Math.floor(v) / (n * 2) * 1000) / 10 + (v - Math.floor(v)) / 100 : v; },
+    recFmt: (v, x) => { const n = curryLen(x); return n ? Math.round(Math.floor(v) / (n * 2) * 100) + '%(' + Math.floor(v) + '/' + n * 2 + '点)' : Math.floor(v) + '点'; },
     play: playCurry,
     // リザルト用:正しいレシピと自分の答えを並べて、◎○×をつける
     result: drawCurryResult
@@ -1292,6 +1295,9 @@ const CURRY_SPICES = [
   { n: 'クローブ', short: 'クローブ', s: 'clove', c: '#4a2d22' },
   { n: '黒こしょう', short: '黒こしょう', s: 'pepper', c: '#1e1c1c' }
 ];
+
+// 補足データからレシピの個数を出す(Firebaseから配列がオブジェクトで返ることもある)
+const curryLen = x => { const r = x && x.r; return r ? (Array.isArray(r) ? r.length : Object.keys(r).length) : 0; };
 
 // 時間の設定(ここを変えると難しさが変わる)
 function curryCfg() {

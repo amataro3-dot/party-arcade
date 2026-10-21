@@ -70,6 +70,39 @@ document.addEventListener('touchend', ev => {
 }, { passive: false });
 document.addEventListener('dblclick', ev => { if (ev.target.closest && ev.target.closest('.stage')) ev.preventDefault(); }, { passive: false });
 
+/* ---------- タイトルホルダー(サイト全体で、ゲームごとの最高記録を1人分) ----------
+   ルームで遊んだ記録だけ数える(練習モードは数えない)。失敗(isMiss)は数えない。同じ記録なら先に出した人のまま。
+   比べる値は game.rec(v, x) があればそれ(カレーの%など)、なければ v。表示は game.recFmt があればそれ、なければ game.fmt */
+const RECORD_PATH = 'minigame-records';
+let records = {};
+const recValue = (g, v, x) => (g.rec ? g.rec(v, x) : v);
+const recText = (g, r) => { try { return g.recFmt ? g.recFmt(r.v, r.x || undefined) : g.fmt(r.v, r.x || undefined); } catch (e) { return ''; } };
+/* カウントダウン画面に出す1行 */
+function titleHtml(game) {
+  if (!db) return '';
+  const r = records[game.id];
+  const body = r && typeof r.v === 'number'
+    ? `<b style="color:#f2f4ff">${h(r.name || '???')}</b>(${h(recText(game, r))})`
+    : 'まだいない! 最初の記録を出そう';
+  return `<div style="margin:0 0 12px;padding:8px 12px;border-radius:10px;background:rgba(255,204,51,0.12);color:#ffcc33;font-size:15px">👑 タイトルホルダー: ${body}</div>`;
+}
+/* 記録を出したら呼ぶ。いまの記録より良ければ書きかえる(2人同時でも、良いほうが残る) */
+function tryRecord(game, v, x, roundKey, onNew) {
+  if (!db || game.isMiss(v)) return;
+  const r = recValue(game, v, x);
+  if (typeof r !== 'number' || !isFinite(r)) return;
+  const better = (a, b) => (game.lowerBetter ? a < b : a > b);
+  db.ref(RECORD_PATH + '/' + game.id).transaction(cur => {
+    if (cur && typeof cur.r === 'number' && !better(r, cur.r)) return;   // 記録更新ならず(書かない)
+    return { name: myName, pid, v, x: x === undefined ? null : x, r, room: roomId, rk: roundKey, at: Date.now() };
+  }, (err, committed) => { if (!err && committed && onNew) onNew(); }, false);
+}
+/* このラウンドで新記録を出した人か(結果画面の印用) */
+function isNewTitle(game, id, roundKey) {
+  const r = records[game.id];
+  return !!(r && r.pid === id && r.room === roomId && r.rk === roundKey);
+}
+
 /* ---------- 起動 ---------- */
 function init() {
   pid = localStorage.getItem('pid');
@@ -87,6 +120,11 @@ function init() {
   firebase.initializeApp(firebaseConfig);
   db = firebase.database();
   db.ref('.info/serverTimeOffset').on('value', s => { offset = s.val() || 0; });
+  // タイトルホルダー(ゲームごとの最高記録)をいつも最新で持っておく
+  db.ref(RECORD_PATH).on('value', s => {
+    records = s.val() || {};
+    if (room && room.phase === 'roundResult' && viewKey === 'roundResult') renderRoundResult();   // 新記録の印を出し直す
+  }, () => {});
 
   const saved = localStorage.getItem('room');
   if (saved) {
