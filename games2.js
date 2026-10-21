@@ -5,7 +5,7 @@
 GAMES.push(
   {
     id: 'burger', title: 'マディーズバーガーを作ろう!',
-    desc: '上から落ちてくる具材を、お皿で受け止めて積み上げよう!<br>操作は「地面より下」で指を左右に動かす。<br>真ん中に乗せるほど高得点。ずれすぎると落ちる。<br>塔が傾きすぎると崩れる! 上のバンズまで乗せたら完成!',
+    desc: '上から落ちてくる具材を、お皿で受け止めて積み上げよう!<br>操作は「地面より下」で指を左右に動かす。<br>真ん中に乗せるほど高得点。ずれすぎると落ちる。<br>上のバンズの前にケチャップ! ウネウネ動くボトルに合わせて、いちばん上の具材で受け止めよう。<br>塔が傾きすぎると崩れる! 上のバンズまで乗せたら完成!',
     lowerBetter: false, miss: 0,
     isMiss: v => v < 1,
     fmt: (v, x) => {
@@ -19,8 +19,8 @@ GAMES.push(
   },
   {
     id: 'jack', title: 'ジャックを注げ!',
-    descBase: 'ボトルを押している間、グラスにジャックが注がれる。<br>指を離すと止まる。注ぎ足しはOK、減らせない。<br>量の数字は出ない。液面を見て「決定」!<br>お題の量に近いほど上位。あふれたら失敗。',
-    desc: 'ボトルを押している間、グラスにジャックが注がれる。<br>指を離すと止まる。注ぎ足しはOK、減らせない。<br>量の数字は出ない。液面を見て「決定」!<br>お題の量に近いほど上位。あふれたら失敗。',
+    descBase: 'ボトルを押している間、グラスにジャックが注がれる。<br>指を離すと止まる。注ぎ足しはOK、減らせない。<br>量の数字は出ない。液面を見て「決定」!<br>グラスはふちまで<b style="color:#ffcc33">315ml</b>。あふれたら失敗。<br>お題の量に近いほど上位。',
+    desc: 'ボトルを押している間、グラスにジャックが注がれる。<br>指を離すと止まる。注ぎ足しはOK、減らせない。<br>量の数字は出ない。液面を見て「決定」!<br>グラスはふちまで<b style="color:#ffcc33">315ml</b>。あふれたら失敗。<br>お題の量に近いほど上位。',
     lowerBetter: true, miss: 999,
     isMiss: v => v >= 999,
     fmt: (v, x) => {
@@ -86,23 +86,46 @@ function burgerCfg() {
     EDGE: 0.085,      // これ以内はギリギリ。これより大きいと落ちる
     TOPPLE: 0.85,     // 重心がすぐ下の具材の幅の半分×これを超えると崩れる
     WOB_K: 60, WOB_D: 6, WOB_G: 0.1, // 揺れ(ばねの強さ・おさまりやすさ・お皿の加速の効き)
-    GAP: 0.2,         // 次の具材が出るまでの間(秒)
-    T0: 2, T1: 1      // 1個目と9個目の落ちる時間(秒)
+    GAP: 0.15,        // 次の具材が出るまでの間(秒)
+    T0: 1.6, T1: 0.8, // 1個目と10個目の落ちる時間(秒)
+    DROP: 0.03,       // ケチャップを1滴出す間隔(秒)
+    DROP_V: 2.4,      // ケチャップの落ちる速さ(高さ/秒)
+    NOZ: 0.1          // ケチャップのボトルの口の高さ(世界のy)
   };
 }
 
-// 具材の順番と落ちる位置。種が同じなら全員同じ
+// 具材の順番と落ちる位置、ケチャップの動き。種が同じなら全員同じ
+// 'K' はケチャップ(上のバンズの直前)
 function burgerMake(seed) {
   const C = burgerCfg(), rnd = seededRng(seed);
-  const mid = ['l', 'p', 'p', 't', 'o', 'c', 'c'];
+  const mid = ['l', 'l', 'p', 'p', 't', 'o', 'c', 'c'];
   for (let i = mid.length - 1; i > 0; i--) {
     const j = Math.floor(rnd() * (i + 1));
     [mid[i], mid[j]] = [mid[j], mid[i]];
   }
-  return ['b', ...mid, 'u'].map((k, i) => ({
+  const items = ['b', ...mid, 'u'].map((k, i) => ({
     k, x: 0.18 + rnd() * 0.64, ph: rnd() * Math.PI * 2,
-    T: C.T0 + (C.T1 - C.T0) * i / 8
+    T: C.T0 + (C.T1 - C.T0) * i / 9
   }));
+  const kp = {
+    k: 'K',
+    dur: 2.5 + rnd() * 0.5,                         // 出している時間(秒)
+    dir: rnd() < 0.5 ? 1 : -1,                      // 1=左から右 -1=右から左
+    sv: 0.4 + rnd() * 0.45, sk: 1 + Math.floor(rnd() * 2), sp: rnd() * Math.PI * 2,   // 速さのムラ
+    a1: 0.05 + rnd() * 0.05, w1: 2 + rnd() * 2, p1: rnd() * Math.PI * 2,             // ウネウネ(大きい波)
+    a2: 0.02 + rnd() * 0.03, w2: 4 + rnd() * 3, p2: rnd() * Math.PI * 2              // ウネウネ(小さい波)
+  };
+  items.splice(items.length - 1, 0, kp);
+  return items;
+}
+
+// ケチャップのボトルの横位置。u は 0〜1(出し始め〜出し終わり)
+function burgerKetchupX(kp, u) {
+  // 進み方: 速くなったり遅くなったりする(でも止まったり戻ったりはしない)
+  const q = u + kp.sv * (Math.cos(kp.sp) - Math.cos(2 * Math.PI * kp.sk * u + kp.sp)) / (2 * Math.PI * kp.sk);
+  const base = kp.dir > 0 ? 0.15 + 0.7 * q : 0.85 - 0.7 * q;
+  const x = base + kp.a1 * Math.sin(2 * Math.PI * kp.w1 * u + kp.p1) + kp.a2 * Math.sin(2 * Math.PI * kp.w2 * u + kp.p2);
+  return Math.max(0.06, Math.min(0.94, x));
 }
 
 // レタスはひらひら揺れる。age 秒後の横位置
@@ -144,6 +167,8 @@ function playBurger(stage, round, submit) {
     const marks = [];                         // 各具材の結果 P/G/E/X
     const offs = [];                          // 乗った具材のずれ(同点対策用)
     let bonus = 0, cur = null, next = 0, wait = 0.3, sim = 0, done = false, iv = null;
+    let kc = null, kPts = 0;                  // ケチャップの最中の様子 / ケチャップの点数
+    const kName = it => it.k === 'K' ? 'ケチャップ' : K[it.k].name;
 
     const stackH = n => { let t = 0; for (let i = 0; i < n; i++) t += K[stack[i].k].h; return t; };
     const hfOf = i => (stackH(i) + K[stack[i].k].h / 2) / 0.45;     // 高いほど揺れが大きい
@@ -153,17 +178,50 @@ function playBurger(stage, round, submit) {
     const updateHead = () => {
       dotsEl.innerHTML = items.map((it, i) => {
         const m = marks[i];
-        const c = m === 'P' ? '#ffcc33' : m === 'G' || m === 'E' ? '#35d07f' : m === 'X' ? '#ff5c6c' : (cur && cur.idx === i) ? '#f2f4ff' : 'rgba(242,244,255,0.25)';
+        const now = (cur && cur.idx === i) || (kc && kc.idx === i);
+        const c = m === 'P' ? '#ffcc33' : m === 'G' || m === 'E' ? '#35d07f' : m === 'X' ? '#ff5c6c' : m === 'K' ? '#e8452c' : now ? '#f2f4ff' : 'rgba(242,244,255,0.25)';
         return `<span style="color:${c}">●</span>`;
       }).join('');
-      const ni = next + (cur ? 1 : 0);
-      nxEl.textContent = ni < items.length ? K[items[ni].k].name : '—';
+      const ni = next + (cur || kc ? 1 : 0);
+      nxEl.textContent = ni < items.length ? kName(items[ni]) : '—';
     };
 
     const spawn = () => {
       const it = items[next];
-      cur = Object.assign({}, it, { idx: next, t0: sim, vy: BASE / (it.T * K[it.k].f) });
+      if (it.k === 'K') kc = { kp: it, idx: next, t0: sim, n: 0, hit: 0, drops: [] };   // ケチャップ開始
+      else cur = Object.assign({}, it, { idx: next, t0: sim, vy: BASE / (it.T * K[it.k].f) });
       updateHead();
+    };
+
+    // ケチャップ: ボトルから1滴ずつ出して落とす。いちばん上の具材の高さで、具材の幅の中なら乗る
+    const stepKetchup = dt => {
+      const age = sim - kc.t0, kp = kc.kp;
+      while (kc.n * C.DROP <= Math.min(age, kp.dur)) {
+        kc.drops.push({ x: burgerKetchupX(kp, kc.n * C.DROP / kp.dur), y: C.NOZ, live: true });
+        kc.n++;
+      }
+      const n = stack.length, top = BASE - stackH(n);
+      for (let i = kc.drops.length - 1; i >= 0; i--) {
+        const o = kc.drops[i], y0 = o.y;
+        o.y += C.DROP_V * dt;
+        if (o.live && y0 < top && o.y >= top) {
+          o.live = false;
+          if (n && Math.abs(o.x - layerX(n - 1)) <= K[stack[n - 1].k].w / 2) {   // 乗った
+            kc.hit++;
+            (stack[n - 1].ket = stack[n - 1].ket || []).push(o.x - layerX(n - 1));
+            kc.drops.splice(i, 1);
+            continue;
+          }
+        }
+        if (o.y > C.WH + 0.1) kc.drops.splice(i, 1);
+      }
+      if (age > kp.dur && !kc.drops.length) {                                   // ケチャップ終わり
+        kPts = Math.round(100 * kc.hit / Math.max(1, kc.n));
+        marks[kc.idx] = 'K';
+        pop('ケチャップ ' + kPts + '%', n ? layerX(n - 1) : px, top - 0.06, '#ff7a66', true);
+        kc = null; next++; wait = C.GAP;
+        updateHead();
+      }
     };
 
     // 崩れる: 段 k から上を全部落とす
@@ -220,11 +278,13 @@ function playBurger(stage, round, submit) {
       done = true; cur = null;
       const n = stack.length;
       const complete = n > 0 && stack[n - 1].k === 'u';
-      const score = n * 50 + bonus + (complete ? 100 : 0);
+      const score = n * 50 + bonus + (complete ? 100 : 0) + kPts;
       const avg = offs.length ? offs.reduce((a, b) => a + b, 0) / offs.length : C.EDGE;
       const frac = Math.round(0.9 * Math.max(0, 1 - avg / C.EDGE) * 100) / 100;   // ずれが小さいほど大きい小数
       const v = score > 0 ? score + frac : 0;
-      const data = { n, c: complete ? 1 : 0, k: stack.map(l => l.k).join(''), d: stack.map((l, i) => Math.round((l.dx + wob * hfOf(i)) * 1000) / 1000) };
+      const data = { n, c: complete ? 1 : 0, kp: kPts, k: stack.map(l => l.k).join(''), d: stack.map((l, i) => Math.round((l.dx + wob * hfOf(i)) * 1000) / 1000) };
+      const kl = stack.findIndex(l => l.ket && l.ket.length);                    // ケチャップが乗っている段(結果の絵用、間引く)
+      if (kl >= 0) { data.kl = kl; data.kx = stack[kl].ket.filter((_, i) => i % 2 === 0).map(v => Math.round(v * 1000) / 1000); }
       if (complete) pop('完成!', px, BASE - stackH(n) - 0.12, '#ffcc33', true);
       timers.push(setTimeout(() => submit(v, data), 1000));
     };
@@ -247,7 +307,8 @@ function playBurger(stage, round, submit) {
         if (o.y > C.WH + 0.6) debris.splice(i, 1);
       }
       // いま落ちている具材
-      if (cur) {
+      if (kc) stepKetchup(dt);
+      else if (cur) {
         const age = sim - cur.t0, yb = cur.vy * age, top = BASE - stackH(stack.length);
         if (yb >= top) land(burgerItemX(cur, age), top);
       } else if (next < items.length) {
@@ -274,7 +335,17 @@ function playBurger(stage, round, submit) {
       }
       // お皿と積んだ具材
       drawBurgerPlate(ctx, X(px), gy, C.PLATE_W * s, C.PLATE_H * s);
-      stack.forEach((l, i) => drawBurgerItem(ctx, l.k, X(layerX(i)), Y(BASE - stackH(i)), K[l.k].w * s, K[l.k].h * s));
+      stack.forEach((l, i) => {
+        drawBurgerItem(ctx, l.k, X(layerX(i)), Y(BASE - stackH(i)), K[l.k].w * s, K[l.k].h * s);
+        if (l.ket) drawBurgerKetchup(ctx, l.ket, X(layerX(i)), Y(BASE - stackH(i) - K[l.k].h), s);
+      });
+      // ケチャップのボトルと、落ちているケチャップ
+      if (kc && !done) {
+        ctx.fillStyle = '#e8452c';
+        kc.drops.forEach(o => { ctx.beginPath(); ctx.ellipse(X(o.x), Y(o.y), Math.max(2, s * 0.009), Math.max(3, s * 0.02), 0, 0, Math.PI * 2); ctx.fill(); });
+        const age = sim - kc.t0;
+        if (age <= kc.kp.dur + 0.3) drawKetchupBottle(ctx, X(burgerKetchupX(kc.kp, Math.min(1, age / kc.kp.dur))), Y(C.NOZ), s);
+      }
       // 落ちている具材と、着地する場所のガイド(点線と影)
       if (cur && !done) {
         const age = sim - cur.t0, x = burgerItemX(cur, age), yb = cur.vy * age;
@@ -340,13 +411,31 @@ function playBurger(stage, round, submit) {
         sim += dt;
         if (!done) {
           step(dt);
-          if (sim > 17.2) finish();               // 念のため(18秒以内に必ず終わる)
+          if (sim > 19) finish();                 // 念のため(必ず終わる)
         }
       }
       draw();
     }, 16);
     timers.push(iv);
   });
+}
+
+// 具材の上に乗ったケチャップ。xs は具材の真ん中からの位置(世界の幅)、yt は具材の上の面(px)
+function drawBurgerKetchup(ctx, xs, cx, yt, sc) {
+  ctx.fillStyle = '#e8452c';
+  const r = Math.max(1.5, sc * 0.011);
+  xs.forEach(dx => { ctx.beginPath(); ctx.arc(cx + dx * sc, yt - r * 0.4, r, 0, Math.PI * 2); ctx.fill(); });
+}
+
+// ケチャップのボトル(さかさま)。(x, y) が口の位置
+function drawKetchupBottle(ctx, x, y, s) {
+  const w = s * 0.07, h = s * 0.13;
+  ctx.fillStyle = '#d8352a';
+  rrect(ctx, x - w / 2, y - h - s * 0.03, w, h, w * 0.3); ctx.fill();
+  ctx.fillStyle = '#f2f4ff';
+  ctx.beginPath(); ctx.moveTo(x - w * 0.3, y - s * 0.03); ctx.lineTo(x + w * 0.3, y - s * 0.03); ctx.lineTo(x, y); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillRect(x - w * 0.3, y - h * 0.9 - s * 0.03, w * 0.15, h * 0.7);
 }
 
 function drawBurgerPlate(ctx, cx, gy, w, h) {
@@ -409,22 +498,31 @@ function drawBurgerResult(el, data, size) {
   const ctx = cv.getContext('2d');
   ctx.scale(dpr, dpr);
   const C = burgerCfg(), K = BURGER_KIND;
-  const sc = size / 0.72, cx = size / 2, gy = size * 0.94;
+  const sc = size / 0.8, cx = size / 2, gy = size * 0.94;
   drawBurgerPlate(ctx, cx, gy, C.PLATE_W * sc, C.PLATE_H * sc);
   const ks = (data && typeof data.k === 'string') ? data.k : '';
   const raw = data && data.d ? data.d : [];
   const ds = Array.isArray(raw) ? raw : Object.values(raw);
   let y = gy - C.PLATE_H * sc;
+  const kraw = data && data.kx ? data.kx : [];
+  const kx = (Array.isArray(kraw) ? kraw : Object.values(kraw)).map(Number);
   for (let i = 0; i < ks.length; i++) {
     const kd = K[ks[i]]; if (!kd) continue;
-    drawBurgerItem(ctx, ks[i], cx + (Number(ds[i]) || 0) * sc, y, kd.w * sc, kd.h * sc);
+    const x = cx + (Number(ds[i]) || 0) * sc;
+    drawBurgerItem(ctx, ks[i], x, y, kd.w * sc, kd.h * sc);
     y -= kd.h * sc;
+    if (data && data.kl === i && kx.length) drawBurgerKetchup(ctx, kx, x, y, sc);
   }
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
   if (data && data.c) {
     ctx.fillStyle = '#ffcc33';
     ctx.font = `bold ${Math.round(size * 0.13)}px sans-serif`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ctx.fillText('完成!', cx, size * 0.04);
+    ctx.fillText('完成!', cx, size * 0.02);
+  }
+  if (data && typeof data.kp === 'number') {           // ケチャップは上のバンズに隠れるので、文字でも出す
+    ctx.fillStyle = '#ff7a66';
+    ctx.font = `bold ${Math.round(size * 0.09)}px sans-serif`;
+    ctx.fillText('ケチャップ ' + data.kp + '%', cx, size * (data.c ? 0.16 : 0.04));
   }
   el.appendChild(cv);
 }
@@ -448,7 +546,7 @@ function playJack(stage, round, submit) {
   countdown(stage, game, round, () => {
     stage.innerHTML =
       `<div class="center" style="font-size:22px;margin:6px 0"><b style="color:#ffcc33">${target}ml</b> 注げ!</div>` +
-      `<div class="center sub" id="info">ボトルを押して注ぐ ・ 残り <b id="left">15.0</b> 秒</div>` +
+      `<div class="center sub" id="info">ボトルを押して注ぐ(ふちまで315ml) ・ 残り <b id="left">15.0</b> 秒</div>` +
       `<canvas id="pad" style="display:block;width:100%;height:52vh;margin-top:6px;touch-action:none"></canvas>` +
       `<button class="btn" id="ok" style="margin-top:8px">決定</button>`;
     const cv = stage.querySelector('#pad');

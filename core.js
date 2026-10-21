@@ -60,6 +60,16 @@ function withEndShow(stage, fn) {
   };
 }
 
+/* iPhone(Safari)で、同じ場所をすばやく2回タップすると画面が拡大されるのを止める。
+   ゲーム中の画面(.stage)の中だけ。ゲームの操作は pointerdown で受けているので、遊び方は変わらない */
+let lastTouchEnd = 0;
+document.addEventListener('touchend', ev => {
+  const now = Date.now();
+  if (now - lastTouchEnd <= 350 && ev.target.closest && ev.target.closest('.stage')) ev.preventDefault();
+  lastTouchEnd = now;
+}, { passive: false });
+document.addEventListener('dblclick', ev => { if (ev.target.closest && ev.target.closest('.stage')) ev.preventDefault(); }, { passive: false });
+
 /* ---------- 起動 ---------- */
 function init() {
   pid = localStorage.getItem('pid');
