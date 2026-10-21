@@ -289,6 +289,15 @@ function playBurger(stage, round, submit) {
       timers.push(setTimeout(() => submit(v, data), 1000));
     };
 
+    // 落ちていく具材を動かす(ゲームが終わったあとも動かし続ける。止めると、落ちた具材が塔の上に止まって見えてしまう)
+    const moveDebris = dt => {
+      for (let i = debris.length - 1; i >= 0; i--) {
+        const o = debris[i];
+        o.vy += 3 * dt; o.x += o.vx * dt; o.y += o.vy * dt; o.r += o.vr * dt;
+        if (o.y > C.WH + 0.6) debris.splice(i, 1);
+      }
+    };
+
     const step = dt => {
       // お皿: 指を少し遅れて追いかける
       const want = Math.max(-C.VMAX, Math.min(C.VMAX, (tx - px) * C.FOLLOW));
@@ -300,12 +309,7 @@ function playBurger(stage, round, submit) {
       wobV += (-C.WOB_K * wob - C.WOB_D * wobV - (dv / dt) * C.WOB_G) * dt;
       wob += wobV * dt;
       if (stack.length) checkTopple();
-      // 落ちていく具材
-      for (let i = debris.length - 1; i >= 0; i--) {
-        const o = debris[i];
-        o.vy += 3 * dt; o.x += o.vx * dt; o.y += o.vy * dt; o.r += o.vr * dt;
-        if (o.y > C.WH + 0.6) debris.splice(i, 1);
-      }
+      moveDebris(dt);
       // いま落ちている具材
       if (kc) stepKetchup(dt);
       else if (cur) {
@@ -412,7 +416,7 @@ function playBurger(stage, round, submit) {
         if (!done) {
           step(dt);
           if (sim > 19) finish();                 // 念のため(必ず終わる)
-        }
+        } else moveDebris(dt);                    // 終わったあとも、落ちた具材は下へ落ちていく
       }
       draw();
     }, 16);

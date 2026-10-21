@@ -5,20 +5,23 @@ const GAMES = [];
 
 GAMES.push(
   {
-    id: 'just5', title: '5秒ジャスト',
-    desc: 'スタートしたら数字が見えなくなる。<br>心の中で数えて、5秒ぴったりでSTOP!<br>誤差が小さいほど上位。',
+    id: 'just5', title: '〇秒ジャスト',   // id は昔の「5秒ジャスト」のまま(古いルームとの食い違いを防ぐため)
+    descBase: 'お題の秒数(5〜9秒)ぴったりでSTOP!<br>スタートして2秒たつと、数字が見えなくなる。<br>心の中で数えよう。誤差が小さいほど上位。',
+    desc: 'お題の秒数(5〜9秒)ぴったりでSTOP!<br>スタートして2秒たつと、数字が見えなくなる。<br>心の中で数えよう。誤差が小さいほど上位。',
     lowerBetter: true, miss: 99999,
     isMiss: v => v >= 99999,
-    fmt: v => v >= 99999 ? '時間切れ' : '誤差 ' + (v / 1000).toFixed(3) + '秒',
+    fmt: (v, x) => v >= 99999 ? '時間切れ' : '誤差 ' + (v / 1000).toFixed(3) + '秒' + (x && x.t ? '(お題' + just5Sec(x.t) + ')' : ''),
     play: playJust5
   },
   {
-    id: 'react', title: '反射神経',
-    desc: '赤い間は待つ。<br>緑になったらすぐタップ!<br>早すぎるとフライング。',
-    lowerBetter: true, miss: 3000,
-    isMiss: v => v >= 3000,
-    fmt: v => v >= 9999 ? 'フライング' : v >= 3000 ? '時間切れ' : v + 'ms',
-    play: playReact
+    id: 'ruler', title: '定規キャッチ!',
+    desc: '定規が予告なしに落ちてくる!<br>落ちたらすぐ、画面のどこでもタップしてつかもう。<br>3回勝負。つかんだ位置(何cm落ちたか)の平均が短いほど上位。<br>ピクッと揺れるだけのフェイントもあるよ。<br>落ちる前に押すとフライング(その回は40cm)。',
+    lowerBetter: true, miss: 99,
+    isMiss: v => v >= 99,
+    fmt: v => v >= 99 ? '全部失敗' : '平均 ' + v.toFixed(1) + 'cm',
+    play: playRuler,
+    // リザルト用:定規に3回分のつかんだ位置を描く
+    result: drawRulerResult
   },
   {
     id: 'drawcm', title: '〇センチを描け！',
@@ -67,47 +70,220 @@ function countdown(stage, game, round, onGo) {
   timers.push(iv);
 }
 
-/* --- 5秒ジャスト --- */
+/* --- 〇秒ジャスト --- */
+const just5Sec = t => (t % 1 ? Number(t).toFixed(1) : String(t)) + '秒';   // 7 → 「7秒」、7.5 → 「7.5秒」
 function playJust5(stage, round, submit) {
   const game = GAMES.find(g => g.id === 'just5');
+  // 全員共通の round.delay からお題を決める → 5〜9秒、0.5秒刻みの9通り
+  const target = 5 + Math.floor(seededRng(Math.round((round.delay || 3000) * 1000))() * 9) * 0.5;
+  game.desc = game.descBase + `<div style="margin-top:14px;font-size:22px">お題 <b style="color:#ffcc33">${just5Sec(target)}</b></div>`;
   countdown(stage, game, round, () => {
-    stage.innerHTML = `<div class="big-num" id="t">0.00</div><div class="center sub">5.00秒ぴったりで止めろ!</div><button class="btn big" id="stop">STOP</button>`;
+    stage.innerHTML = `<div class="big-num" id="t">0.00</div><div class="center" style="font-size:20px"><b style="color:#ffcc33">${just5Sec(target)}</b>ぴったりで止めろ!</div><button class="btn big" id="stop">STOP</button>`;
     const el = stage.querySelector('#t');
     const t0 = performance.now();
     let done = false;
     const iv = setInterval(() => {
       const e = performance.now() - t0;
       el.textContent = e < 2000 ? (e / 1000).toFixed(2) : '?.??';
-      if (e > 12000 && !done) { done = true; submit(game.miss); }
+      if (e > (target + 5) * 1000 && !done) { done = true; submit(game.miss, { t: target }); }   // お題+5秒で時間切れ
     }, 30);
     timers.push(iv);
     stage.querySelector('#stop').addEventListener('pointerdown', ev => {
       ev.preventDefault();
       if (done) return;
       done = true; clearInterval(iv);
-      submit(Math.round(Math.abs(performance.now() - t0 - 5000)));
+      const e = performance.now() - t0;
+      el.textContent = (e / 1000).toFixed(2);                 // 止めたら本当の秒数を見せる
+      submit(Math.round(Math.abs(e - target * 1000)), { t: target });
     });
   });
 }
 
-/* --- 反射神経 --- */
-function playReact(stage, round, submit) {
-  const game = GAMES.find(g => g.id === 'react');
+/* --- 定規キャッチ! --- */
+// 設定(ここを変えると難しさが変わる)
+function rulerCfg() {
+  return {
+    LEN: 40,        // 定規の長さ(cm)。つかめなかった・フライングはこの値
+    G: 980,         // 重力(cm/秒²)。本物と同じ。0.2秒で約20cm落ちる
+    TRIES: 3,       // 何回勝負か
+    PAUSE: 1.1      // 1回終わってから次の回までの秒数
+  };
+}
+
+// 各回の待ち時間とフェイント。種が同じなら全員同じ
+function rulerMake(seed) {
+  const C = rulerCfg(), rnd = seededRng(seed), tries = [];
+  for (let i = 0; i < C.TRIES; i++) {
+    const wait = 1.5 + rnd() * 2.5;                                  // 落ちるまで 1.5〜4秒
+    const feint = rnd() < 0.45 && wait > 1.9 ? 0.6 + rnd() * (wait - 1.2) : -1;   // ピクッと揺れる時刻(なしは -1)
+    tries.push({ wait, feint });
+  }
+  return tries;
+}
+
+function playRuler(stage, round, submit) {
+  const game = GAMES.find(g => g.id === 'ruler');
+  const C = rulerCfg();
+  const tries = rulerMake(Math.round((round.delay || 3000) * 1000));
+
   countdown(stage, game, round, () => {
-    stage.innerHTML = `<div class="reactzone wait" id="rz"><div>待て…<small>緑になったらタップ!</small></div></div>`;
-    const z = stage.querySelector('#rz');
-    let state = 'wait', t0 = 0;
-    const goTimer = setTimeout(() => {
-      state = 'go'; z.className = 'reactzone go'; z.innerHTML = '<div>今!</div>';
-      t0 = performance.now();
-      timers.push(setTimeout(() => { if (state === 'go') { state = 'done'; submit(3000); } }, 3000));
-    }, round.delay);
-    timers.push(goTimer);
-    z.addEventListener('pointerdown', ev => {
+    stage.innerHTML =
+      `<div class="center sub" id="info" style="font-size:18px;margin:2px 0"><b id="no" style="color:#ffcc33">1</b>/${C.TRIES}回目 ・ 落ちたらタップ!</div>` +
+      `<div class="center sub" id="rec" style="min-height:22px"></div>` +
+      `<canvas id="pad" style="display:block;width:100%;height:62vh;margin-top:4px;touch-action:none"></canvas>`;
+    const cv = stage.querySelector('#pad');
+    const noEl = stage.querySelector('#no'), rec = stage.querySelector('#rec');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = cv.getBoundingClientRect();
+    const W = rect.width, H = rect.height;
+    cv.width = W * dpr; cv.height = H * dpr;
+    const ctx = cv.getContext('2d');
+    ctx.scale(dpr, dpr);
+
+    const hy = H * 0.86;                         // 指の高さ(定規の0cmがここ)
+    const pxcm = H * 0.72 / C.LEN;              // 1cmの長さ(画面上)
+    const res = [], kinds = [];                  // 各回のcm / 'o'=つかんだ 'f'=フライング 'm'=つかめず
+    let k = 0, st = 'wait', tStart = 0, tDrop = 0, fallen = 0, msg = '', msgColor = '#ffcc33', done = false, iv = null;
+    const now = () => performance.now() / 1000;
+
+    const draw = e => {
+      ctx.clearRect(0, 0, W, H);
+      const tr = tries[k] || {};
+      let shake = 0;
+      if (st === 'wait' && tr.feint > 0) {      // フェイント: ピクッと揺れる
+        const a = e - tStart - tr.feint;
+        if (a > 0 && a < 0.18) shake = Math.sin(a * 90) * 4;
+      }
+      const top = hy - C.LEN * pxcm + fallen * pxcm;
+      drawRulerBody(ctx, W / 2 + shake, top, pxcm, C.LEN);
+      // 指(つかんだら閉じる)
+      const shut = st === 'caught' || st === 'next' && kinds[k] === 'o';
+      const gap = shut ? pxcm * 1.6 : pxcm * 4.5;
+      ctx.fillStyle = '#f2c9a0';
+      rrectR(ctx, W / 2 - gap - pxcm * 5, hy - pxcm * 1.2, pxcm * 5, pxcm * 2.4, pxcm * 1.2); ctx.fill();
+      rrectR(ctx, W / 2 + gap, hy - pxcm * 1.2, pxcm * 5, pxcm * 2.4, pxcm * 1.2); ctx.fill();
+      ctx.strokeStyle = 'rgba(255,204,51,0.35)'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(0, hy); ctx.lineTo(W, hy); ctx.stroke(); ctx.setLineDash([]);
+      if (msg) {
+        ctx.fillStyle = msgColor; ctx.font = 'bold 34px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(msg, W / 2, H * 0.08);
+      }
+    };
+
+    const showRec = () => {
+      rec.innerHTML = res.map((v, i) => kinds[i] === 'o' ? `${i + 1}回目 <b style="color:#f2f4ff">${v.toFixed(1)}cm</b>` : `${i + 1}回目 <b style="color:#ff5c6c">${kinds[i] === 'f' ? 'フライング' : '落ちた'}</b>`).join(' ・ ');
+    };
+
+    const finish = () => {
+      if (done) return;
+      done = true;
+      const ok = kinds.filter(s => s === 'o').length;
+      const avg = Math.round(res.reduce((a, b) => a + b, 0) / res.length * 10) / 10;
+      stage.querySelector('#info').innerHTML = ok ? `平均 <b style="color:#ffcc33;font-size:24px">${avg.toFixed(1)}cm</b>` : '<b style="color:#ff5c6c">全部失敗…</b>';
+      submit(ok ? avg : 99, { c: res.slice(), s: kinds.join('') });
+    };
+
+    const endTry = (cm, kind) => {
+      res.push(Math.round(cm * 10) / 10); kinds.push(kind);
+      st = 'next'; tStart = now();
+      msg = kind === 'o' ? cm.toFixed(1) + 'cm!' : kind === 'f' ? 'フライング!' : '落ちた!';
+      msgColor = kind === 'o' ? '#ffcc33' : '#ff5c6c';
+      showRec();
+    };
+
+    const startTry = () => {
+      st = 'wait'; tStart = now(); fallen = 0; msg = '';
+      noEl.textContent = k + 1;
+    };
+
+    cv.addEventListener('pointerdown', ev => {
       ev.preventDefault();
-      if (state === 'wait') { state = 'done'; clearTimeout(goTimer); submit(9999); }
-      else if (state === 'go') { state = 'done'; submit(Math.min(2999, Math.round(performance.now() - t0))); }
+      if (done) return;
+      const e = now();
+      if (st === 'wait') { fallen = 0; endTry(C.LEN, 'f'); }                 // 落ちる前に押した
+      else if (st === 'fall') {
+        fallen = Math.min(C.LEN, 0.5 * C.G * Math.pow(e - tDrop, 2));
+        st = 'caught'; endTry(fallen, 'o');
+      }
     });
+
+    startTry();
+    iv = setInterval(() => {
+      if (done) return;
+      const e = now(), tr = tries[k];
+      if (st === 'wait' && e - tStart >= tr.wait) { st = 'fall'; tDrop = tStart + tr.wait; }
+      if (st === 'fall') {
+        fallen = 0.5 * C.G * Math.pow(e - tDrop, 2);
+        if (fallen >= C.LEN) { fallen = C.LEN + 30; endTry(C.LEN, 'm'); }   // つかめなかった(画面の下へ)
+      }
+      if (st === 'next' && e - tStart >= C.PAUSE) {
+        k++;
+        if (k >= C.TRIES) { finish(); return; }
+        startTry();
+      }
+      draw(e);
+    }, 16);
+    timers.push(iv);
+  });
+}
+
+// 角の丸い四角(games2.js の rrect と同じもの。games.js だけでも動くように持っておく)
+function rrectR(ctx, x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+// 縦の定規を描く。top は40cmの端(上)、下の端が0cm
+function drawRulerBody(ctx, cx, top, pxcm, len) {
+  const w = Math.max(28, pxcm * 3.6), x0 = cx - w / 2, hgt = len * pxcm;
+  ctx.fillStyle = '#ecd9a0';
+  rrectR(ctx, x0, top, w, hgt, 4); ctx.fill();
+  ctx.strokeStyle = '#3a2e1a'; ctx.fillStyle = '#3a2e1a';
+  ctx.font = `bold ${Math.max(9, Math.round(pxcm * 1.5))}px sans-serif`;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  for (let c = 0; c <= len; c++) {
+    const y = top + hgt - c * pxcm;
+    const l = c % 5 === 0 ? w * 0.42 : w * 0.22;
+    ctx.lineWidth = c % 5 === 0 ? 1.6 : 1;
+    ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x0 + l, y); ctx.stroke();
+    if (c % 5 === 0 && c > 0) ctx.fillText(String(c), x0 + w * 0.5, y);
+  }
+}
+
+// リザルト用:横向きの定規に、3回分のつかんだ位置を描く
+function drawRulerResult(el, data, size) {
+  size = size || 90;
+  const w = Math.min(300, size * 2.4), h = size * 0.55;
+  const dpr = window.devicePixelRatio || 1;
+  const cv = document.createElement('canvas');
+  cv.width = w * dpr; cv.height = h * dpr;
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.scale(dpr, dpr);
+  el.appendChild(cv);
+  if (!data) return;
+  const C = rulerCfg();
+  const raw = data.c || [];
+  const cs = (Array.isArray(raw) ? raw : Object.values(raw)).map(Number);
+  const ks = typeof data.s === 'string' ? data.s : '';
+  const x0 = w * 0.04, x1 = w * 0.96, y0 = h * 0.42, rh = h * 0.32;
+  const X = cm => x0 + (x1 - x0) * Math.min(1, cm / C.LEN);
+  ctx.fillStyle = '#ecd9a0'; rrectR(ctx, x0, y0, x1 - x0, rh, 3); ctx.fill();
+  ctx.strokeStyle = '#3a2e1a'; ctx.fillStyle = '#3a2e1a';
+  ctx.font = `${Math.max(8, Math.round(h * 0.16))}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  for (let c = 0; c <= C.LEN; c += 5) {
+    ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(X(c), y0); ctx.lineTo(X(c), y0 + rh * (c % 10 ? 0.35 : 0.55)); ctx.stroke();
+    if (c % 10 === 0 && c > 0 && c < C.LEN) ctx.fillText(String(c), X(c), y0 + rh * 0.55);
+  }
+  cs.forEach((cm, i) => {                         // 3回分の印(番号つき)。失敗は赤
+    const ok = ks[i] === 'o', x = ok ? X(cm) : X(C.LEN);
+    ctx.fillStyle = ok ? '#ffcc33' : '#ff5c6c';
+    ctx.beginPath(); ctx.moveTo(x, y0 - 1); ctx.lineTo(x - h * 0.1, y0 - h * 0.2); ctx.lineTo(x + h * 0.1, y0 - h * 0.2); ctx.closePath(); ctx.fill();
+    ctx.font = `bold ${Math.max(8, Math.round(h * 0.17))}px sans-serif`; ctx.textBaseline = 'bottom';
+    ctx.fillText(ok ? String(i + 1) : '×', x + (ok ? 0 : (i - 1) * h * 0.22), y0 - h * 0.2);
   });
 }
 
