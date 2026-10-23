@@ -13,6 +13,10 @@ const firebaseConfig = {
 };
 /* ================================================ */
 
+/* App Check(reCAPTCHA Enterprise)のサイトキー。公開して大丈夫なもの。
+   「このサイトのページから来たアクセスか」を Firebase が確かめるのに使う */
+const APP_CHECK_SITE_KEY = '6LfFffwtAAAAAKMoDAtqJDlgLK720RWBuBENti2t';
+
 const MAX_PLAYERS = 8;
 const POINTS = [10, 8, 6, 5, 4, 3, 2, 1]; // 順位ポイント
 const COUNTDOWN_MS = 5000;
@@ -91,10 +95,12 @@ function tryRecord(game, v, x, roundKey, onNew) {
   if (!db || game.isMiss(v)) return;
   const r = recValue(game, v, x);
   if (typeof r !== 'number' || !isFinite(r)) return;
-  const better = (a, b) => (game.lowerBetter ? a < b : a > b);
+  // s は「大きいほど良い」にそろえた値(ルールで「良くなるときだけ書ける」をチェックするのに使う)
+  const s = game.lowerBetter ? -r : r;
   db.ref(RECORD_PATH + '/' + game.id).transaction(cur => {
-    if (cur && typeof cur.r === 'number' && !better(r, cur.r)) return;   // 記録更新ならず(書かない)
-    return { name: myName, pid, v, x: x === undefined ? null : x, r, room: roomId, rk: roundKey, at: Date.now() };
+    const cs = cur ? (typeof cur.s === 'number' ? cur.s : typeof cur.r === 'number' ? (game.lowerBetter ? -cur.r : cur.r) : null) : null;
+    if (cs !== null && !(s > cs)) return;   // 記録更新ならず(書かない)
+    return { name: String(myName).slice(0, 20), pid, v, x: x === undefined ? null : x, r, s, room: roomId, rk: roundKey, at: Date.now() };
   }, (err, committed) => { if (!err && committed && onNew) onNew(); }, false);
 }
 /* このラウンドで新記録を出した人か(結果画面の印用) */
@@ -118,6 +124,9 @@ function init() {
     return;
   }
   firebase.initializeApp(firebaseConfig);
+  // App Check: このサイトから来たアクセスだと証明する(失敗してもゲームは続ける)
+  try { firebase.appCheck().activate(new firebase.appCheck.ReCaptchaEnterpriseProvider(APP_CHECK_SITE_KEY), true); }
+  catch (e) { console.warn('App Check', e); }
   db = firebase.database();
   db.ref('.info/serverTimeOffset').on('value', s => { offset = s.val() || 0; });
   // タイトルホルダー(ゲームごとの最高記録)をいつも最新で持っておく
@@ -126,6 +135,22 @@ function init() {
     if (room && room.phase === 'roundResult' && viewKey === 'roundResult') renderRoundResult();   // 新記録の印を出し直す
   }, () => {});
 
+  // 見えない匿名ログイン。ログインのID(uid)を、そのままプレイヤーのID(pid)にする。
+  // データベースのルールで「自分のデータしか書けない」をチェックするのに使う
+  setApp('<h1>🎮 PartyArcade</h1><div class="card center sub">接続中…</div>');
+  let started = false;
+  const go = () => { if (started) return; started = true; localStorage.setItem('pid', pid); startup(); };
+  try {
+    firebase.auth().signInAnonymously()
+      .then(c => { if (c && c.user && c.user.uid) pid = c.user.uid; })
+      .catch(e => console.warn('ログインできませんでした', e))
+      .then(go);
+  } catch (e) { console.warn('ログインできませんでした', e); go(); }
+  setTimeout(go, 8000);                         // 通信が遅くても、いつまでも待たない
+}
+
+/* ログインのあと: 前にいたルームがあれば戻る、なければホームへ */
+function startup() {
   const saved = localStorage.getItem('room');
   if (saved) {
     db.ref('minigame-rooms/' + saved).once('value').then(s => {
@@ -302,14 +327,9 @@ async function joinRoom() {
       let nm = name, k = 2;
       const names = Object.values(players).map(p => p.name);
       while (names.includes(nm)) nm = name + (k++);
-      const tr = await ref.child('players').transaction(p => {
-        p = p || {};
-        if (p[pid]) return p;
-        if (Object.keys(p).length >= MAX_PLAYERS) return; // abort
-        p[pid] = { name: nm, joinedAt: Date.now() };
-        return p;
-      });
-      if (!tr.committed) { setMsg('満員です(最大' + MAX_PLAYERS + '人)'); busy = false; return; }
+      // 自分の場所(players/自分のID)にだけ書く(ルールで、人の場所には書けないため)
+      if (Object.keys(players).length >= MAX_PLAYERS) { setMsg('満員です(最大' + MAX_PLAYERS + '人)'); busy = false; return; }
+      await ref.child('players/' + pid).set({ name: nm, joinedAt: Date.now() });
     }
     busy = false; enterRoom(id);
   } catch (e) { setMsg('エラー: ' + e.message); busy = false; }
