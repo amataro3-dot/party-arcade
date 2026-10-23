@@ -180,7 +180,8 @@ function renderHome(msg) {
     <div class="card">
       <button class="btn sub" id="practice">練習モード(1人で遊ぶ)</button>
     </div>
-    <div class="msg" id="msg">${h(msg || '')}</div>`);
+    <div class="msg" id="msg">${h(msg || '')}</div>
+    <p class="center" style="font-size:13px;margin:4px 0"><a href="/" style="color:#9aa3c7">Muddy's Games トップ</a> ・ <a href="/privacy.html" style="color:#9aa3c7">プライバシーポリシー</a></p>`);
   $('#create').onclick = createRoom;
   $('#join').onclick = joinRoom;
   $('#practice').onclick = renderPractice;
