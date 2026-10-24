@@ -759,16 +759,18 @@ function drawAngleResult(el, data, size) {
   el.appendChild(cv);
 }
 
-/* ---------- 後出しジャンケン! / 色ちがい探し! ---------- */
+/* ---------- 旗揚げゲーム!! / 色ちがい探し! ---------- */
 
 GAMES.push(
   {
-    id: 'janken', title: '後出しジャンケン!',
-    desc: '相手の手を見て、「勝って!」なら勝つ手、「負けて!」なら負ける手をすばやく出そう!<br>15秒で何問正解できるか勝負。<br>まちがえると0.8秒おやすみ。<br>正解数が多いほど上位。0問は0点。',
+    id: 'hata', title: '旗揚げゲーム!!',
+    desc: '審判のお題どおりに旗を上げ下げしよう!<br>下の「赤」「白」ボタンを押している間=上げる、離す=下げる。<br>「〜ない」のひっかけは、一瞬でも動かしたらアウト。お題に出ていない旗も動かさない。<br>だんだん速くなる! 全部で20点+連続正解ボーナス(4連続+1 … 20連続+5)。',
     lowerBetter: false, miss: 0,
     isMiss: v => v <= 0,
-    fmt: v => v + '問',
-    play: playJanken
+    fmt: v => v + '点',
+    play: playHata,
+    // リザルト用:20個の○×
+    result: drawHataResult
   },
   {
     id: 'oddcolor', title: '色ちがい探し!',
@@ -780,89 +782,268 @@ GAMES.push(
   }
 );
 
-/* --- 後出しジャンケン! --- */
-function playJanken(stage, round, submit) {
-  // 番号ではなく id で自分を探すので、組み込み時に番号を直さなくてよい
-  const game = GAMES.find(g => g.id === 'janken');
-  const NAME = ['グー', 'チョキ', 'パー'], EMO = ['✊', '✌️', '✋'];
-  const DUR = 15000, LOCK = 800;
-  // 全員同じ問題:相手の手と「勝って/負けて」。正解の手が2問続けて同じにならないようにする
-  const rnd = seededRng(Math.round((round.delay || 3000) * 1000));
-  const qs = [];
-  let prev = -1;
-  while (qs.length < 300) {
-    const hand = Math.floor(rnd() * 3), win = rnd() < 0.5;
-    const ans = win ? (hand + 2) % 3 : (hand + 1) % 3;   // 0=グー 1=チョキ 2=パー
-    if (ans === prev) continue;
-    prev = ans;
-    qs.push({ hand, win, ans });
+/* --- 旗揚げゲーム!! --- */
+// 速さなどの数字。だんだん速くなる(はじめ → おわり)
+const hataCfg = {
+  parts: 20,                       // お題の部分の数(=最高20点)
+  doubleMin: 5, doubleMax: 7,      // 2点のお題(赤と白)の数
+  negChance: 0.3,                  // 「〜ない」のひっかけが出る確率
+  trapChance: 0.85,               // 「〜ない」が、動かしたくなる向きになる確率
+  changeChance: 0.8,               // 「上げて/下げて」で、旗を動かす必要があるお題になる確率(残りは、もうその状態)
+  charStart: 80, charEnd: 40,      // 1文字が出る間隔(ms)
+  graceStart: 700, graceEnd: 420,  // 最後の文字が出てから判定までの猶予(ms)
+  lead: 600,                       // 始まってから1文字目が出るまで(ms)
+  maxTotal: 17200                  // 全体がこれより長くなったら、全部を少し速くする(ms)
+};
+const HATA_BONUS = { 4: 1, 8: 2, 12: 3, 16: 4, 20: 5 };   // 連続正解のボーナス
+
+// お題を作る。種が同じなら全員同じ
+// 部分 = { f: 'r'|'w'(旗), up: 上げ/下げ, neg: ひっかけ, text, ws: 始まり, we: 判定, q: 何問目, k: 何番目の部分 }
+function hataMake(seed) {
+  const C = hataCfg, rnd = seededRng(seed);
+  const nDouble = C.doubleMin + Math.floor(rnd() * (C.doubleMax - C.doubleMin + 1));
+  const kinds = [];
+  for (let i = 0; i < nDouble; i++) kinds.push(2);
+  for (let i = 0; i < C.parts - nDouble * 2; i++) kinds.push(1);
+  for (let i = kinds.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [kinds[i], kinds[j]] = [kinds[j], kinds[i]]; }
+  const parts = [];
+  const state = { r: false, w: false };                    // 正しく遊んだときの旗(お題の出方を決めるためだけに使う)
+  kinds.forEach((kind, q) => {
+    const first = rnd() < 0.5 ? 'r' : 'w';
+    for (let s = 0; s < kind; s++) {
+      const f = s === 0 ? first : (first === 'r' ? 'w' : 'r');
+      const neg = rnd() < C.negChance;
+      // 「上げて/下げて」は、たいてい旗を動かすお題にする(何もしないで点が取れすぎないように)
+      // 「〜ない」も、たいていは「つい動かしたくなる」向きにする(下がっているときの「上げない」など)
+      const up = rnd() < (neg ? C.trapChance : C.changeChance) ? !state[f] : state[f];
+      if (!neg) state[f] = up;
+      const mid = kind === 2 && s === 0;                     // 2点のお題の前半は「〜て」「〜ないで」
+      const text = (f === 'r' ? '赤' : '白') + (up ? '上げ' : '下げ') + (neg ? (mid ? 'ないで' : 'ない') : 'て');
+      parts.push({ f, up, neg, text, q, line: s });
+    }
+  });
+  // 時間を決める
+  let t = C.lead;
+  parts.forEach((p, k) => {
+    const g = k / (parts.length - 1);
+    p.cms = C.charStart + (C.charEnd - C.charStart) * g;
+    p.grace = C.graceStart + (C.graceEnd - C.graceStart) * g;
+    p.ws = t; t += p.text.length * p.cms + p.grace; p.we = t;
+  });
+  if (t > C.maxTotal) {                                    // 長すぎたら、全部を同じ割合で速くする
+    const sc = (C.maxTotal - C.lead) / (t - C.lead);
+    t = C.lead;
+    parts.forEach(p => { p.cms *= sc; p.grace *= sc; p.ws = t; t += p.text.length * p.cms + p.grace; p.we = t; });
   }
+  parts.forEach((p, k) => { p.k = k; });
+  return { parts, total: t, nq: kinds.length };
+}
+
+// 1つの部分の判定。st = 始まったときの旗、now = 判定のときの旗、moved = 期間中に動いた旗
+function hataJudge(p, st, now, moved) {
+  const other = p.f === 'r' ? 'w' : 'r';
+  if (moved[other]) return false;                          // 出ていない旗を動かした
+  if (p.neg) return !moved[p.f];                           // 「〜ない」は動かさない
+  if (st[p.f] === p.up) return !moved[p.f];                // もうその状態なら、一瞬でも変えたらアウト
+  return now[p.f] === p.up;                                // 判定の瞬間にその状態
+}
+
+// 部分ごとの○×(配列)から、点数・ボーナス・最大連続を出す
+function hataScore(oks) {
+  let pts = 0, bonus = 0, run = 0, best = 0;
+  oks.forEach(ok => {
+    if (ok) { pts++; run++; best = Math.max(best, run); bonus += HATA_BONUS[run] || 0; }
+    else run = 0;
+  });
+  return { pts, bonus, best, total: pts + bonus };
+}
+
+function playHata(stage, round, submit) {
+  const game = GAMES.find(g => g.id === 'hata');
+  const { parts, total } = hataMake(Math.round((round.delay || 3000) * 1000));
 
   countdown(stage, game, round, () => {
-    const btn = i => `<div data-h="${i}" style="flex:1;height:22vh;min-height:92px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:52px;line-height:1.1;border:2px solid rgba(255,255,255,0.25);border-radius:16px;background:rgba(255,255,255,0.1);user-select:none;-webkit-user-select:none;touch-action:manipulation">${EMO[i]}<span style="font-size:15px;margin-top:4px">${NAME[i]}</span></div>`;
+    const btn = (f, label) => `<div data-f="${f}" style="flex:1;height:17vh;min-height:84px;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:bold;border-radius:18px;user-select:none;-webkit-user-select:none;touch-action:none;` +
+      (f === 'r' ? 'background:#c8323f;color:#fff;border:3px solid #ff5c6c' : 'background:#e9ecf6;color:#1a1f3a;border:3px solid #ffffff') + `">${label}</div>`;
     stage.innerHTML =
-      `<div class="center sub" style="font-size:18px;margin:4px 0">正解 <b id="ok" style="color:#ffcc33;font-size:26px">0</b> 問 ・ 残り <b id="left">15.0</b> 秒</div>` +
-      `<div class="center" style="margin-top:4px"><div class="sub">相手</div>` +
-      `<div id="hand" style="font-size:110px;line-height:1.15"></div>` +
-      `<div id="mode" style="display:inline-block;padding:6px 26px;border-radius:999px;font-size:30px;font-weight:bold"></div>` +
-      `<div class="sub" id="msg" style="min-height:24px;margin-top:6px;color:#ff8a8a"></div></div>` +
-      `<div id="btns" style="display:flex;gap:10px;margin:8px auto 0;width:100%;max-width:460px;-webkit-tap-highlight-color:transparent">${btn(0)}${btn(1)}${btn(2)}</div>`;
-    const okEl = stage.querySelector('#ok');
-    const left = stage.querySelector('#left');
-    const handEl = stage.querySelector('#hand');
-    const modeEl = stage.querySelector('#mode');
-    const msg = stage.querySelector('#msg');
-    const btns = stage.querySelector('#btns');
+      `<div class="center sub" style="font-size:16px;margin:2px 0">得点 <b id="pt" style="color:#ffcc33;font-size:22px">0</b> ・ 連続 <b id="run">0</b></div>` +
+      `<div id="qbox" style="position:relative;height:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:14px">` +
+      `<div id="l0" style="font-size:34px;font-weight:bold;line-height:1.25;min-height:42px;letter-spacing:1px"></div>` +
+      `<div id="l1" style="font-size:34px;font-weight:bold;line-height:1.25;min-height:0;letter-spacing:1px"></div>` +
+      `<div id="mark" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:90px;font-weight:bold;pointer-events:none;opacity:0"></div>` +
+      `<div id="combo" style="position:absolute;right:8px;top:4px;font-size:16px;font-weight:bold;color:#ffcc33;opacity:0"></div></div>` +
+      `<canvas id="pad" style="display:block;width:100%;height:30vh;touch-action:none"></canvas>` +
+      `<div id="btns" style="display:flex;gap:28px;width:100%;-webkit-tap-highlight-color:transparent">${btn('r', '赤')}${btn('w', '白')}</div>`;
+    const ptEl = stage.querySelector('#pt'), runEl = stage.querySelector('#run');
+    const lines = [stage.querySelector('#l0'), stage.querySelector('#l1')];
+    const mark = stage.querySelector('#mark'), combo = stage.querySelector('#combo');
+    const cv = stage.querySelector('#pad');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = cv.getBoundingClientRect();
+    const W = rect.width, H = rect.height;
+    cv.width = W * dpr; cv.height = H * dpr;
+    const ctx = cv.getContext('2d');
+    ctx.scale(dpr, dpr);
 
     const t0 = performance.now();
-    let n = 0, lock = false, done = false, iv = null;
+    const flag = { r: false, w: false };                     // true = 上げている
+    const press = { r: new Set(), w: new Set() };            // 押している指
+    const arm = { r: 0, w: 0 };                              // 腕の角度(0=下、1=上)の見た目
+    let cur = 0, startedK = -1, moved = { r: false, w: false }, start = { r: false, w: false };
+    let shownQ = -1, done = false, iv = null, markT = -9, comboT = -9;
+    const oks = [];
 
-    const show = () => {
-      const q = qs[n];
-      handEl.textContent = EMO[q.hand];
-      modeEl.textContent = q.win ? '勝って!' : '負けて!';
-      modeEl.style.background = q.win ? '#ffcc33' : '#5b8cff';
-      modeEl.style.color = q.win ? '#1a1f3a' : '#ffffff';
+    const colorText = s => s.replace(/^(赤|白)/, m => `<span style="color:${m === '赤' ? '#ff5c6c' : '#ffffff'};${m === '白' ? 'text-shadow:0 0 6px rgba(255,255,255,0.6)' : ''}">${m}</span>`);
+
+    // 旗を動かす(ボタンの押す・離す)
+    const setFlag = (f, v) => {
+      if (done || flag[f] === v) return;
+      const e = performance.now() - t0;
+      advance(e);                                              // 時間が来た判定を先にすませる
+      flag[f] = v;
+      if (cur < parts.length && startedK === cur) moved[f] = true;
     };
+    const btns = stage.querySelector('#btns');
+    btns.querySelectorAll('[data-f]').forEach(b => {
+      const f = b.dataset.f;
+      const look = () => { b.style.transform = press[f].size ? 'scale(0.96)' : ''; b.style.filter = press[f].size ? 'brightness(0.85)' : ''; };
+      b.addEventListener('pointerdown', ev => {
+        ev.preventDefault();
+        try { b.setPointerCapture(ev.pointerId); } catch (e) { }
+        press[f].add(ev.pointerId); look(); setFlag(f, true);
+      });
+      const up = ev => { if (!press[f].has(ev.pointerId)) return; press[f].delete(ev.pointerId); look(); if (!press[f].size) setFlag(f, false); };
+      b.addEventListener('pointerup', up);
+      b.addEventListener('pointercancel', up);
+      b.addEventListener('lostpointercapture', up);
+      b.addEventListener('contextmenu', ev => ev.preventDefault());
+    });
+
     const finish = () => {
       if (done) return;
       done = true;
-      clearInterval(iv);
-      btns.style.opacity = '0.35';
-      msg.style.color = '#ffcc33';
-      msg.textContent = '終了! ' + n + '問';
-      submit(n);
+      const sc = hataScore(oks);
+      submit(sc.total, { p: sc.pts, b: sc.bonus, c: sc.best, m: oks.map(o => o ? 'o' : 'x').join('') });
     };
 
-    btns.addEventListener('pointerdown', ev => {
-      ev.preventDefault();
-      const c = ev.target.closest('[data-h]');
-      if (done || lock || !c) return;
-      if (+c.dataset.h === qs[n].ans) {          // 正解:すぐ次の問題
-        n++;
-        okEl.textContent = n;
-        show();
-      } else {                                   // まちがい:0.8秒おやすみ(同じ問題のまま)
-        lock = true;
-        btns.style.opacity = '0.35';
-        msg.textContent = 'ちがう!';
-        timers.push(setTimeout(() => {
-          if (done) return;
-          lock = false;
-          btns.style.opacity = '1';
-          msg.textContent = '';
-        }, LOCK));
-      }
-    });
+    // 審判のお題の文字を出す
+    const showText = e => {
+      const p = parts[cur];
+      if (p.q !== shownQ) { shownQ = p.q; lines[0].innerHTML = ''; lines[1].innerHTML = ''; }
+      if (e < p.ws) return;
+      const n = Math.min(p.text.length, Math.floor((e - p.ws) / p.cms) + 1);
+      lines[p.line].innerHTML = colorText(p.text.slice(0, n));
+    };
 
-    show();
-    iv = setInterval(() => {
-      const e = performance.now() - t0;
-      if (!done) left.textContent = Math.max(0, (DUR - e) / 1000).toFixed(1);
-      if (e >= DUR) finish();
-    }, 50);
+    // プレイヤーの後ろ姿
+    const draw = sec => {
+      ctx.clearRect(0, 0, W, H);
+      const cx = W / 2, s = Math.min(H / 230, W / 260);
+      const sy = H * 0.52;                                    // 肩の高さ
+      ['r', 'w'].forEach(f => { arm[f] += ((flag[f] ? 1 : 0) - arm[f]) * 0.45; });
+      // 体
+      ctx.fillStyle = '#3d5bd9';
+      rrectG(ctx, cx - 44 * s, sy - 6 * s, 88 * s, 110 * s, 22 * s); ctx.fill();
+      // 頭(後ろから見た髪)
+      ctx.fillStyle = '#e8b896'; ctx.beginPath(); ctx.arc(cx - 31 * s, sy - 34 * s, 7 * s, 0, Math.PI * 2); ctx.arc(cx + 31 * s, sy - 34 * s, 7 * s, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#2a2018'; ctx.beginPath(); ctx.arc(cx, sy - 38 * s, 30 * s, 0, Math.PI * 2); ctx.fill();
+      // 腕と旗(画面の左=赤、右=白)
+      ['r', 'w'].forEach(f => {
+        const dir = f === 'r' ? -1 : 1;
+        const a = arm[f];
+        const ang = (0.22 + (2.55 - 0.22) * a);               // 下からの角度(ラジアン)
+        const shx = cx + dir * 40 * s, shy = sy + 6 * s, L = 62 * s;
+        const hx = shx + dir * Math.sin(ang) * L, hy = shy + Math.cos(ang) * L;
+        ctx.strokeStyle = '#3d5bd9'; ctx.lineCap = 'round'; ctx.lineWidth = 16 * s;
+        ctx.beginPath(); ctx.moveTo(shx, shy); ctx.lineTo(hx, hy); ctx.stroke();
+        // 旗の棒は、手から腕と同じ向きに伸ばす
+        const px = hx + dir * Math.sin(ang) * 34 * s, py = hy + Math.cos(ang) * 34 * s;
+        const bx = hx - dir * Math.sin(ang) * 8 * s, by = hy - Math.cos(ang) * 8 * s;
+        ctx.strokeStyle = '#c9a36b'; ctx.lineWidth = 4 * s;
+        ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(px, py); ctx.stroke();
+        // 旗の布(棒の先から外へ、少しなびく)
+        const wave = Math.sin(sec * 9 + (f === 'r' ? 0 : 1.7)) * 4 * s;
+        const fw = 44 * s, fh = 30 * s;
+        const mx = px - Math.sin(ang) * dir * fh, my = py - Math.cos(ang) * fh;   // 棒にそって、先から fh 戻ったところ
+        ctx.fillStyle = f === 'r' ? '#e8343f' : '#ffffff';
+        ctx.beginPath();
+        ctx.moveTo(px, py);
+        ctx.quadraticCurveTo(px + dir * fw * 0.5, py + wave, px + dir * fw, py + wave * 0.3);
+        ctx.lineTo(mx + dir * fw, my + wave * 0.3);
+        ctx.quadraticCurveTo(mx + dir * fw * 0.5, my + wave, mx, my);
+        ctx.closePath(); ctx.fill();
+        if (f === 'w') { ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1.5; ctx.stroke(); }
+        // 手
+        ctx.fillStyle = '#e8b896'; ctx.beginPath(); ctx.arc(hx, hy, 8 * s, 0, Math.PI * 2); ctx.fill();
+      });
+    };
+
+    // 判定の時間が来た部分を順に判定して、次の部分を始める
+    const advance = e => {
+      while (cur < parts.length && e >= parts[cur].we) {
+        if (startedK !== cur) { start = { r: flag.r, w: flag.w }; moved = { r: false, w: false }; startedK = cur; }
+        const p = parts[cur];
+        const ok = hataJudge(p, start, flag, moved);
+        oks.push(ok);
+        const sc = hataScore(oks);
+        ptEl.textContent = sc.total;
+        let run = 0; for (let i = oks.length - 1; i >= 0 && oks[i]; i--) run++;
+        runEl.textContent = run;
+        mark.textContent = ok ? '○' : '×';
+        mark.style.color = ok ? '#35d07f' : '#ff5c6c';
+        markT = e / 1000;
+        if (ok && HATA_BONUS[run]) { combo.textContent = run + '連続! +' + HATA_BONUS[run]; comboT = e / 1000; }
+        cur++;
+      }
+      if (cur < parts.length && startedK !== cur && e >= parts[cur].ws) {   // 部分の始まり:いまの旗の状態を覚える
+        start = { r: flag.r, w: flag.w }; moved = { r: false, w: false }; startedK = cur;
+      }
+    };
+
+    const tick = () => {
+      const e = performance.now() - t0, sec = e / 1000;
+      advance(e);
+      if (cur < parts.length) showText(e);
+      mark.style.opacity = Math.max(0, 0.45 * (1 - (sec - markT) / 0.45));
+      combo.style.opacity = Math.max(0, 1 - Math.max(0, sec - comboT - 0.6) / 0.4) * (sec - comboT < 1 ? 1 : 0);
+      draw(sec);
+      if (cur >= parts.length && !done && e >= total + 250) finish();
+    };
+    tick();
+    iv = setInterval(tick, 16);
     timers.push(iv);
   });
+}
+
+// 角丸(games2.js の rrect は後から読み込まれるので、ここ用に持っておく)
+function rrectG(ctx, x, y, w, h, r) {
+  r = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// リザルト用:20個の○×を並べる
+function drawHataResult(el, data, size) {
+  const { ctx, w, h: H } = wideCanvas(el, size, 3, 0.68);
+  if (!data || typeof data.m !== 'string') return;
+  const h = H * 0.74;
+  const m = data.m, n = m.length || 20, per = 10;
+  const cw = w / per, ch = h / 2;
+  ctx.fillStyle = '#9aa3c7'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `${Math.max(11, Math.round(Math.min(H * 0.13, w / 23)))}px sans-serif`;
+  ctx.fillText('正解 ' + (data.p != null ? data.p : '?') + '/20 ・ 最大 ' + (data.c != null ? data.c : '?') + '連続 ・ ボーナス +' + (data.b || 0), w / 2, H * 0.88);
+  for (let i = 0; i < n; i++) {
+    const x = (i % per + 0.5) * cw, y = (Math.floor(i / per) + 0.5) * ch;
+    const r = Math.min(cw, ch) * 0.32;
+    ctx.lineWidth = Math.max(1.5, r * 0.3);
+    if (m[i] === 'o') { ctx.strokeStyle = '#35d07f'; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.stroke(); }
+    else { ctx.strokeStyle = '#ff5c6c'; ctx.beginPath(); ctx.moveTo(x - r, y - r); ctx.lineTo(x + r, y + r); ctx.moveTo(x + r, y - r); ctx.lineTo(x - r, y + r); ctx.stroke(); }
+  }
 }
 
 /* --- 色ちがい探し! --- */
