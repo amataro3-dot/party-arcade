@@ -764,12 +764,12 @@ function drawAngleResult(el, data, size) {
 GAMES.push(
   {
     id: 'hata', title: '旗揚げゲーム!!',
-    desc: '審判のお題どおりに旗を上げ下げしよう!<br>下の「赤」「白」ボタンを押している間=上げる、離す=下げる。<br>「〜ない」のひっかけは、一瞬でも動かしたらアウト。お題に出ていない旗も動かさない。<br>だんだん速くなる! 全部で20点+連続正解ボーナス(4連続+1 … 20連続+5)。',
+    desc: '審判のお題どおりに旗を上げ下げしよう!<br>下の「赤」「白」ボタンを押している間=上げる、離す=下げる。<br>「〜ない」のひっかけは、一瞬でも動かしたらアウト。お題に出ていない旗も動かさない。<br>だんだん速くなる! お題は15こ(1こ1点)+連続正解ボーナス(4連続+1・8連続+2・12連続+3・15連続+4)。最高25点。',
     lowerBetter: false, miss: 0,
     isMiss: v => v <= 0,
     fmt: v => v + '点',
     play: playHata,
-    // リザルト用:20個の○×
+    // リザルト用:15個の○×
     result: drawHataResult
   },
   {
@@ -785,17 +785,17 @@ GAMES.push(
 /* --- 旗揚げゲーム!! --- */
 // 速さなどの数字。だんだん速くなる(はじめ → おわり)
 const hataCfg = {
-  parts: 20,                       // お題の部分の数(=最高20点)
-  doubleMin: 5, doubleMax: 7,      // 2点のお題(赤と白)の数
+  parts: 15,                       // お題の部分の数(=最高15点。ボーナス込みで25点)
+  doubleMin: 4, doubleMax: 5,      // 2点のお題(赤と白)の数
   negChance: 0.3,                  // 「〜ない」のひっかけが出る確率
   trapChance: 0.85,               // 「〜ない」が、動かしたくなる向きになる確率
   changeChance: 0.8,               // 「上げて/下げて」で、旗を動かす必要があるお題になる確率(残りは、もうその状態)
-  charStart: 80, charEnd: 40,      // 1文字が出る間隔(ms)
-  graceStart: 700, graceEnd: 420,  // 最後の文字が出てから判定までの猶予(ms)
+  charStart: 106, charEnd: 54,     // 1文字が出る間隔(ms)(v=17で、20こ→15こに合わせてゆっくりに)
+  graceStart: 930, graceEnd: 560,  // 最後の文字が出てから判定までの猶予(ms)
   lead: 600,                       // 始まってから1文字目が出るまで(ms)
   maxTotal: 17200                  // 全体がこれより長くなったら、全部を少し速くする(ms)
 };
-const HATA_BONUS = { 4: 1, 8: 2, 12: 3, 16: 4, 20: 5 };   // 連続正解のボーナス
+const HATA_BONUS = { 4: 1, 8: 2, 12: 3, 15: 4 };   // 連続正解のボーナス
 
 // お題を作る。種が同じなら全員同じ
 // 部分 = { f: 'r'|'w'(旗), up: 上げ/下げ, neg: ひっかけ, text, ws: 始まり, we: 判定, q: 何問目, k: 何番目の部分 }
@@ -1027,16 +1027,16 @@ function rrectG(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-// リザルト用:20個の○×を並べる
+// リザルト用:○×を2段に並べる(15個なら 8+7)
 function drawHataResult(el, data, size) {
   const { ctx, w, h: H } = wideCanvas(el, size, 3, 0.68);
   if (!data || typeof data.m !== 'string') return;
   const h = H * 0.74;
-  const m = data.m, n = m.length || 20, per = 10;
+  const m = data.m, n = m.length || hataCfg.parts, per = Math.max(1, Math.ceil(n / 2));
   const cw = w / per, ch = h / 2;
   ctx.fillStyle = '#9aa3c7'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.font = `${Math.max(11, Math.round(Math.min(H * 0.13, w / 23)))}px sans-serif`;
-  ctx.fillText('正解 ' + (data.p != null ? data.p : '?') + '/20 ・ 最大 ' + (data.c != null ? data.c : '?') + '連続 ・ ボーナス +' + (data.b || 0), w / 2, H * 0.88);
+  ctx.fillText('正解 ' + (data.p != null ? data.p : '?') + '/' + n + ' ・ 最大 ' + (data.c != null ? data.c : '?') + '連続 ・ ボーナス +' + (data.b || 0), w / 2, H * 0.88);
   for (let i = 0; i < n; i++) {
     const x = (i % per + 0.5) * cw, y = (Math.floor(i / per) + 0.5) * ch;
     const r = Math.min(cw, ch) * 0.32;
