@@ -34,8 +34,8 @@ GAMES.push(
   },
   {
     id: 'hamburg', title: '俺のハンバーグを焼け!',
-    descBase: 'ハンバーグ3個が自動で焼けていく。<br>1回タップでひっくり返す、2回目のタップでお皿へ。<br>焼けている面(下の面)の色は、ふちに見える。<br>両面ともお題の焼き色に近いほど上位。焦げたらダメ!',
-    desc: 'ハンバーグ3個が自動で焼けていく。<br>1回タップでひっくり返す、2回目のタップでお皿へ。<br>焼けている面(下の面)の色は、ふちに見える。<br>両面ともお題の焼き色に近いほど上位。焦げたらダメ!',
+    descBase: 'ハンバーグ3個が焼けていく。出てくる時間も焼ける速さもバラバラ!<br>ハンバーグの色 = いま焼けている下の面の色。<br>1回タップでひっくり返す(生の面が下になる)、2回目のタップでお皿へ。<br>途中で焼ける速さが変わる! ジュージューの粒が増えたら速くなったしるし。<br>両面ともお題の焼き色に近いほど上位。焦げたらダメ!',
+    desc: 'ハンバーグ3個が焼けていく。出てくる時間も焼ける速さもバラバラ!<br>ハンバーグの色 = いま焼けている下の面の色。<br>1回タップでひっくり返す(生の面が下になる)、2回目のタップでお皿へ。<br>途中で焼ける速さが変わる! ジュージューの粒が増えたら速くなったしるし。<br>両面ともお題の焼き色に近いほど上位。焦げたらダメ!',
     lowerBetter: true, miss: 999,
     isMiss: v => v >= 999,
     fmt: (v, x) => v >= 999 ? '全部焦げた…' : '平均誤差 ' + v.toFixed(1) + (x && x.t != null ? '(' + hamName(x.t) + ')' : ''),
@@ -765,16 +765,67 @@ function hamSwatches(t, big) {
     `<div style="height:${big ? 26 : 16}px;border-radius:6px;background:${hamColor(v)};border:${v === t ? '3px solid #ffcc33' : '1px solid rgba(255,255,255,0.2)'}"></div>${name}</div>`).join('') + `</div>`;
 }
 
-// お題と、3個それぞれの焼ける速さ(1秒あたり)。種が同じなら全員同じ
+// お題と、3個それぞれの出方・焼け方。種が同じなら全員同じ
+// 1面ごとに: r = はじめの速さ(1秒あたり)、tc = 速さが変わる時間(その面を焼きはじめてから)、m = 変わったあとの倍率
+const hamCfg = {
+  sideMin: 2.8, sideMax: 5.5,        // 片面がウェルダン(80)になるまでの秒数(はじめの速さ)
+  changeMin: 0.8, changeMax: 3.0,    // 速さが変わるタイミング(秒)
+  upChance: 0.6,                     // 速くなる確率(残りは遅くなる)
+  upMin: 1.4, upMax: 1.9,            // 速くなるときの倍率
+  downMin: 0.55, downMax: 0.8,       // 遅くなるときの倍率
+  firstMax: 1.0,                     // 1個目が出るまで(秒)
+  gapMin: 0.5, gapMax: 1.7,          // 次の1個が出るまでの間(秒)
+  dur: 15
+};
+
+// お題の焼け具合になるまでの秒数
+function hamReach(sd, target) {
+  if (sd.r * sd.tc >= target) return target / sd.r;
+  return sd.tc + (target - sd.r * sd.tc) / (sd.r * sd.m);
+}
+// 焼け具合 lv から 100(焦げ)になるまでの秒数(lv になった時刻 t0 から)
+function hamToBurn(sd, t0, lv) {
+  if (t0 >= sd.tc) return (100 - lv) / (sd.r * sd.m);
+  const lvAtTc = sd.r * sd.tc;
+  if (lvAtTc >= 100) return (100 - lv) / sd.r;
+  return (sd.tc - t0) + (100 - lvAtTc) / (sd.r * sd.m);
+}
+
 function hamMake(seed) {
-  const rnd = seededRng(seed);
+  const C = hamCfg, rnd = seededRng(seed);
   const target = HAM_LEVELS[Math.floor(rnd() * 4)][0];
-  const pats = [0, 1.5, 3].map(enter => {
-    const r1 = 20 * (0.8 + rnd() * 0.45);          // 片面およそ4秒でウェルダン(80)くらい
-    return { enter, r1, r2: r1 * (0.9 + rnd() * 0.2) };
-  });
+  const side = () => {
+    const T = C.sideMin + rnd() * (C.sideMax - C.sideMin);
+    const tc = C.changeMin + rnd() * (C.changeMax - C.changeMin);
+    const m = rnd() < C.upChance ? C.upMin + rnd() * (C.upMax - C.upMin) : C.downMin + rnd() * (C.downMax - C.downMin);
+    return { r: 80 / T, tc, m };
+  };
+  // 出てくる場所の順番もバラバラ
+  const slots = [0, 1, 2];
+  for (let i = 2; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [slots[i], slots[j]] = [slots[j], slots[i]]; }
+  let pats = null;
+  for (let tries = 0; tries < 60; tries++) {
+    let enter = rnd() * C.firstMax, ok = true;
+    const list = [0, 1, 2].map(i => {
+      if (i > 0) enter += C.gapMin + rnd() * (C.gapMax - C.gapMin);
+      return { enter, slot: slots[i], s1: side(), s2: side() };
+    });
+    list.forEach(p => {
+      [p.s1, p.s2].forEach(sd => {
+        const t = hamReach(sd, target);
+        if (t < 1.0) ok = false;                                  // 早すぎて間に合わない
+        if (hamToBurn(sd, t, target) < 0.6) ok = false;           // お題から焦げまでが短すぎる
+      });
+      if (p.enter + hamReach(p.s1, target) + hamReach(p.s2, target) + 0.8 > C.dur - 1) ok = false;  // 時間内に焼けない
+    });
+    pats = list;
+    if (ok) break;
+  }
   return { target, pats };
 }
+
+// いまの焼ける速さ(1秒あたり)。since = その面を焼きはじめてからの秒数
+const hamRate = (sd, since) => since >= sd.tc ? sd.r * sd.m : sd.r;
 
 function playHamburg(stage, round, submit) {
   const game = GAMES.find(g => g.id === 'hamburg');
@@ -799,12 +850,13 @@ function playHamburg(stage, round, submit) {
 
     const pcx = W / 2, pcy = H * 0.38, R = Math.min(W * 0.47, H * 0.36);  // フライパン
     const pr = R * 0.32;                                                 // ハンバーグの半径
-    const slot = [[-0.45, -0.28], [0.45, -0.28], [0, 0.42]].map(([x, y]) => ({ x: pcx + x * R, y: pcy + y * R }));
+    const slotPos = [[-0.45, -0.28], [0.45, -0.28], [0, 0.42]].map(([x, y]) => ({ x: pcx + x * R, y: pcy + y * R }));
     const plateY = H * 0.87;
     const pslot = [-1, 0, 1].map(i => ({ x: W / 2 + i * W * 0.26, y: plateY - H * 0.015 }));
     // st: wait(まだ) / cook1(1面目) / cook2(2面目) / plate(お皿) / burnt(焦げ)
-    const ps = pats.map(p => Object.assign({ st: 'wait', a: 0, b: 0, at: 0, lock: 0 }, p));
-    const DUR = 15, t0 = performance.now();
+    // a = 1面目の焼け具合、b = 2面目。t1/t2 = その面を焼きはじめた時刻
+    const ps = pats.map(p => Object.assign({ st: 'wait', a: 0, b: 0, at: 0, lock: 0, t1: 0, t2: 0 }, p, { pos: slotPos[p.slot] }));
+    const DUR = hamCfg.dur, t0 = performance.now();
     let sim = 0, done = false, ending = false, iv = null;
 
     const finish = () => {
@@ -823,11 +875,14 @@ function playHamburg(stage, round, submit) {
       submit(v, data);
     };
 
+    // いま焼けている面の速さ(焼いていないときは0)
+    const nowRate = p => p.st === 'cook1' ? hamRate(p.s1, sim - p.t1) : p.st === 'cook2' ? hamRate(p.s2, sim - p.t2) : 0;
+
     const step = dt => {
       ps.forEach(p => {
-        if (p.st === 'wait' && sim >= p.enter) { p.st = 'cook1'; p.at = sim; }
-        if (p.st === 'cook1') p.a = Math.min(100, p.a + p.r1 * dt);
-        if (p.st === 'cook2') p.b = Math.min(100, p.b + p.r2 * dt);
+        if (p.st === 'wait' && sim >= p.enter) { p.st = 'cook1'; p.at = sim; p.t1 = sim; }
+        if (p.st === 'cook1') p.a = Math.min(100, p.a + nowRate(p) * dt);
+        if (p.st === 'cook2') p.b = Math.min(100, p.b + nowRate(p) * dt);
         if ((p.st === 'cook1' && p.a >= 100) || (p.st === 'cook2' && p.b >= 100)) { p.st = 'burnt'; p.at = sim; }
       });
       if (!ending && ps.every(p => p.st === 'plate' || p.st === 'burnt')) {
@@ -836,13 +891,14 @@ function playHamburg(stage, round, submit) {
       }
     };
 
-    const drawPatty = (x, y, r, topD, rimD, sq) => {
+    // ハンバーグ(上から見た形)。全体を1つの色で塗る
+    const drawPatty = (x, y, r, d, sq) => {
       ctx.fillStyle = 'rgba(0,0,0,0.35)';
       ctx.beginPath(); ctx.ellipse(x, y + r * 0.12, r * 1.02, r * 0.92 * sq, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = hamColor(rimD);                   // ふち = 焼けている面の色
+      ctx.fillStyle = hamColor(d);
       ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.92 * sq, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = hamColor(topD);                   // 上の面
-      ctx.beginPath(); ctx.ellipse(x, y - r * 0.04 * sq, r * 0.82, r * 0.74 * sq, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 2;
+      ctx.stroke();
       ctx.fillStyle = 'rgba(0,0,0,0.13)';
       [[-0.35, -0.2], [0.25, -0.35], [0.3, 0.2], [-0.15, 0.3], [0.05, -0.02]].forEach(([fx, fy]) => {
         ctx.beginPath(); ctx.arc(x + fx * r, y + fy * r * sq, r * 0.07, 0, Math.PI * 2); ctx.fill();
@@ -861,37 +917,41 @@ function playHamburg(stage, round, submit) {
       ctx.fillStyle = '#dfe4f2'; ctx.beginPath(); ctx.ellipse(W / 2, plateY, W * 0.44, H * 0.075, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#c3c9db'; ctx.beginPath(); ctx.ellipse(W / 2, plateY, W * 0.34, H * 0.05, 0, 0, Math.PI * 2); ctx.fill();
       ps.forEach((p, i) => {
-        const age = sim - p.at;
+        const age = sim - p.at, pos = p.pos;
         if (p.st === 'wait') {                          // まだ乗っていない場所
           ctx.strokeStyle = 'rgba(242,244,255,0.15)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]);
-          ctx.beginPath(); ctx.arc(slot[i].x, slot[i].y, pr, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
+          ctx.beginPath(); ctx.arc(pos.x, pos.y, pr, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
           return;
         }
         if (p.st === 'plate') {                         // お皿へ移る動き
           const f = Math.min(1, age / 0.35), e = 1 - (1 - f) * (1 - f);
-          const x = slot[i].x + (pslot[i].x - slot[i].x) * e;
-          const y = slot[i].y + (pslot[i].y - slot[i].y) * e - Math.sin(Math.PI * f) * pr;
-          drawPatty(x, y, pr * (1 - 0.35 * e), p.a, p.b, 1 - 0.45 * e);
+          const x = pos.x + (pslot[i].x - pos.x) * e;
+          const y = pos.y + (pslot[i].y - pos.y) * e - Math.sin(Math.PI * f) * pr;
+          drawPatty(x, y, pr * (1 - 0.35 * e), p.b, 1 - 0.45 * e);
           return;
         }
-        let x = slot[i].x, y = slot[i].y, sq = 1, top = p.b, rim = p.a;
-        if (p.st === 'cook1' && age < 0.2) { sq = 1; y -= (1 - age / 0.2) * pr * 0.6; }
+        let x = pos.x, y = pos.y, sq = 1, col = p.a;   // 色 = いま焼けている下の面
+        if (p.st === 'cook1' && age < 0.2) { y -= (1 - age / 0.2) * pr * 0.6; }
         if (p.st === 'cook2') {
-          top = p.a; rim = p.b;
-          if (age < 0.3) {                              // ひっくり返す動き
+          col = p.b;
+          if (age < 0.3) {                              // ひっくり返す動き(前半は焼いた面、後半から生の面)
             const f = age / 0.3;
             sq = Math.max(0.08, Math.abs(Math.cos(Math.PI * f)));
             y -= Math.sin(Math.PI * f) * pr * 0.7;
-            if (f < 0.5) { top = 0; rim = p.a; }
+            if (f < 0.5) col = p.a;
           }
         }
-        if (p.st === 'burnt') { top = 100; rim = 100; }
-        drawPatty(x, y, pr, top, rim, sq);
-        if (p.st === 'cook1' || p.st === 'cook2') {     // ジュージュー
-          ctx.fillStyle = 'rgba(255,230,160,0.55)';
-          for (let k = 0; k < 6; k++) {
-            const an = k * 1.05 + Math.floor(sim * 8 + k) * 0.7;
-            ctx.beginPath(); ctx.arc(x + Math.cos(an) * pr * 1.1, y + Math.sin(an) * pr * 1.0, 2, 0, Math.PI * 2); ctx.fill();
+        if (p.st === 'burnt') col = 100;
+        drawPatty(x, y, pr, col, sq);
+        if (p.st === 'cook1' || p.st === 'cook2') {     // ジュージュー。速く焼けているほど粒が多く、速く動く
+          const rate = nowRate(p);
+          const n = Math.max(3, Math.min(18, Math.round(rate / 3)));
+          const spin = 4 + rate * 0.3;
+          ctx.fillStyle = 'rgba(255,230,160,0.6)';
+          for (let k = 0; k < n; k++) {
+            const an = k * (Math.PI * 2 / n) + Math.floor(sim * spin + k) * 0.7;
+            const rr = 1.05 + ((k * 7) % 5) * 0.04;
+            ctx.beginPath(); ctx.arc(x + Math.cos(an) * pr * rr, y + Math.sin(an) * pr * rr * 0.95, 2, 0, Math.PI * 2); ctx.fill();
           }
         }
         if (p.st === 'burnt') {                         // 煙
@@ -916,13 +976,13 @@ function playHamburg(stage, round, submit) {
       let best = -1, bd = pr * 1.2;
       ps.forEach((p, i) => {
         if (p.st !== 'cook1' && p.st !== 'cook2') return;
-        const d = Math.hypot(mx - slot[i].x, my - slot[i].y);
+        const d = Math.hypot(mx - p.pos.x, my - p.pos.y);
         if (d < bd) { bd = d; best = i; }
       });
       if (best < 0) return;
       const p = ps[best];
       if (sim < p.lock) return;                         // ひっくり返した直後の2度押しは無視
-      if (p.st === 'cook1') { p.st = 'cook2'; p.at = sim; p.lock = sim + 0.3; }
+      if (p.st === 'cook1') { p.st = 'cook2'; p.at = sim; p.t2 = sim; p.lock = sim + 0.3; }
       else { p.st = 'plate'; p.at = sim; }
     });
 
@@ -942,7 +1002,7 @@ function playHamburg(stage, round, submit) {
   });
 }
 
-// リザルト用:3個の両面(上半分=1面目、下半分=2面目)と、お題の色を並べる
+// リザルト用:3個を横から見た形で並べる(上半分=1面目、下半分=2面目)。下にお題の色
 function drawHamburgResult(el, data, size) {
   size = size || 90;
   const dpr = window.devicePixelRatio || 1;
@@ -955,23 +1015,29 @@ function drawHamburgResult(el, data, size) {
   const raw = data.f || [];
   const fs = Array.isArray(raw) ? raw : Object.values(raw);
   const st = typeof data.s === 'string' ? data.s : '';
-  const r = size * 0.14, cy = size * 0.36;
+  const w = size * 0.27, h = size * 0.24, top = size * 0.2;
+  // お皿(横から見た線)
+  ctx.fillStyle = 'rgba(223,228,242,0.6)';
+  rrect(ctx, size * 0.04, top + h + size * 0.02, size * 0.92, size * 0.035, size * 0.015); ctx.fill();
   for (let i = 0; i < 3; i++) {
     const f = fs[i] ? (Array.isArray(fs[i]) ? fs[i] : Object.values(fs[i])) : [0, 0];
-    const x = size * (0.2 + i * 0.3);
+    const x = size * (0.05 + i * 0.31);
+    const rad = h * 0.42;
     ctx.globalAlpha = st[i] === 'n' ? 0.45 : 1;
-    ctx.fillStyle = hamColor(Number(f[0]) || 0);
-    ctx.beginPath(); ctx.arc(x, cy, r, Math.PI, 0); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = hamColor(Number(f[1]) || 0);
-    ctx.beginPath(); ctx.arc(x, cy, r, 0, Math.PI); ctx.closePath(); ctx.fill();
+    ctx.save();
+    rrect(ctx, x, top, w, h, rad); ctx.clip();
+    ctx.fillStyle = hamColor(Number(f[0]) || 0); ctx.fillRect(x, top, w, h / 2);
+    ctx.fillStyle = hamColor(Number(f[1]) || 0); ctx.fillRect(x, top + h / 2, w, h / 2);
+    ctx.restore();
     ctx.globalAlpha = 1;
     ctx.strokeStyle = 'rgba(242,244,255,0.5)'; ctx.lineWidth = Math.max(1, size * 0.012);
-    ctx.beginPath(); ctx.arc(x, cy, r, 0, Math.PI * 2); ctx.moveTo(x - r, cy); ctx.lineTo(x + r, cy); ctx.stroke();
+    rrect(ctx, x, top, w, h, rad); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, top + h / 2); ctx.lineTo(x + w, top + h / 2); ctx.stroke();
     if (st[i] === 'b' || st[i] === 'n') {                // 焦げ=赤い×、お皿に乗せていない=?
       ctx.fillStyle = st[i] === 'b' ? '#ff5c6c' : '#f2f4ff';
       ctx.font = `bold ${Math.round(size * 0.16)}px sans-serif`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(st[i] === 'b' ? '×' : '?', x, cy);
+      ctx.fillText(st[i] === 'b' ? '×' : '?', x + w / 2, top + h / 2);
     }
   }
   // お題の色見本
