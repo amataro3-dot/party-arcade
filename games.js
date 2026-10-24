@@ -1146,7 +1146,7 @@ GAMES.push(
   },
   {
     id: 'dodge', title: 'よけろ!',
-    desc: '上から降ってくる岩や板をよけ続けよう!<br>操作は「地面より下」で指を左右に動かす。<br>長く生き残るほど上位。15秒耐えればクリア。',
+    desc: '上から降ってくる物をよけ続けよう!<br>操作は「地面より下」で指を左右に動かす。<br>ジグザグの葉っぱ、巨大岩、途中で速くなる玉、割れる岩、赤く光った所に落ちる柱にも注意!<br>長く生き残るほど上位。15秒耐えればクリア。',
     lowerBetter: false, miss: 0,
     isMiss: v => v <= 0,
     fmt: v => v.toFixed(2) + '秒',
@@ -1228,6 +1228,7 @@ function playNumTouch(stage, round, submit) {
 }
 
 /* --- よけろ! --- */
+// 落ちてくる物の種類: rock(岩) plank(板) leaf(葉っぱ・ジグザグ) giant(巨大岩) accel(加速する玉) split(割れる岩) pillar(柱・前ぶれつき)
 function playDodge(stage, round, submit) {
   // 番号ではなく id で自分を探すので、組み込み時に番号を直さなくてよい
   const game = GAMES.find(g => g.id === 'dodge');
@@ -1257,6 +1258,13 @@ function playDodge(stage, round, submit) {
     let px = 0.5, tx = 0.5, pid = null, touching = false, done = false, dead = false;
     let sim = 0, iv = null;
 
+    const circle = (b, fill) => {
+      ctx.fillStyle = fill;
+      ctx.beginPath(); ctx.arc(X(b.x), b.y * s, b.r * s, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.3)';
+      ctx.beginPath(); ctx.arc(X(b.x) - b.r * s * 0.3, b.y * s - b.r * s * 0.3, b.r * s * 0.25, 0, Math.PI * 2); ctx.fill();
+    };
+
     const draw = e => {
       ctx.clearRect(0, 0, W, H);
       // 世界
@@ -1280,17 +1288,35 @@ function playDodge(stage, round, submit) {
       for (let i = 0; i < objs.length; i++) {
         const o = objs[i], age = e - o.t;
         if (age < 0) break;
-        const y = -o.h + o.vy * age;
-        if (y > C.WH) continue;
-        const cx = o.x + o.vx * age;
-        if (o.plank) {
-          ctx.fillStyle = '#d98a6a';
-          ctx.fillRect(X(cx - o.w / 2), (y) * s, o.w * s, o.h * s);
-        } else {
-          ctx.fillStyle = '#9aa6d6';
-          ctx.beginPath(); ctx.arc(X(cx), (y + o.h / 2) * s, o.w / 2 * s, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = 'rgba(255,255,255,0.35)';
-          ctx.beginPath(); ctx.arc(X(cx) - o.w * s * 0.14, (y + o.h / 2) * s - o.w * s * 0.14, o.w * s * 0.12, 0, Math.PI * 2); ctx.fill();
+        if (o.kind === 'pillar' && age < C.WARN) {            // 柱の前ぶれ: 落ちてくる場所が赤く光る
+          const a = 0.12 + 0.12 * Math.abs(Math.sin(age * 12));
+          ctx.fillStyle = `rgba(255,92,108,${a})`;
+          ctx.fillRect(X(o.x - o.w / 2), 0, o.w * s, gy);
+          ctx.fillStyle = '#ff5c6c';
+          ctx.beginPath(); ctx.moveTo(X(o.x - 0.04), 6); ctx.lineTo(X(o.x + 0.04), 6); ctx.lineTo(X(o.x), 6 + 0.05 * s); ctx.closePath(); ctx.fill();
+        }
+        const bs = dodgeBoxes(o, age);
+        for (const b of bs) {
+          if (b.k === 'plank') { ctx.fillStyle = '#d98a6a'; ctx.fillRect(X(b.x - b.hw), (b.y - b.hh) * s, b.hw * 2 * s, b.hh * 2 * s); }
+          else if (b.k === 'pillar') {
+            ctx.fillStyle = '#8c7ae6'; ctx.fillRect(X(b.x - b.hw), (b.y - b.hh) * s, b.hw * 2 * s, b.hh * 2 * s);
+            ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fillRect(X(b.x - b.hw), (b.y - b.hh) * s, b.hw * 0.6 * s, b.hh * 2 * s);
+          } else if (b.k === 'leaf') {
+            ctx.save(); ctx.translate(X(b.x), b.y * s); ctx.rotate(b.rot || 0);
+            ctx.fillStyle = '#4caf6a';
+            ctx.beginPath(); ctx.ellipse(0, 0, b.hw * 1.15 * s, b.hh * 1.15 * s, 0, 0, Math.PI * 2); ctx.fill();
+            ctx.strokeStyle = '#2d7a45'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(-b.hw * s, 0); ctx.lineTo(b.hw * s, 0); ctx.stroke();
+            ctx.restore();
+          } else if (b.k === 'giant') circle(b, '#6f7aa8');
+          else if (b.k === 'accel') {
+            if (b.hot) { ctx.fillStyle = 'rgba(255,92,108,0.35)'; ctx.beginPath(); ctx.arc(X(b.x), b.y * s, b.r * 1.8 * s, 0, Math.PI * 2); ctx.fill(); }
+            circle(b, b.hot ? '#ff5c6c' : '#e0a050');
+          } else if (b.k === 'split') {
+            circle(b, '#b58a6a');
+            if (!b.half) { ctx.strokeStyle = '#3a2a1e'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X(b.x), (b.y - b.r) * s); ctx.lineTo(X(b.x) + 3, b.y * s); ctx.lineTo(X(b.x) - 2, (b.y + b.r) * s); ctx.stroke(); }
+          }
+          else circle(b, '#9aa6d6');
         }
       }
       ctx.restore();
@@ -1360,14 +1386,23 @@ function playDodge(stage, round, submit) {
   });
 }
 
-// 難しさの設定(ここを変えると難しさが変わる)
+// 難しさの設定
 function dodgeCfg() {
   return {
     WH: 0.95,     // 世界の高さ(幅を1とする)
     PW: 0.045,    // 自分の半分の幅
     PH: 0.09,     // 自分の高さ
     VMAX: 2.6,    // 自分の最高速度(幅/秒)
-    DUR: 15       // クリアまでの秒数
+    DUR: 15,      // クリアまでの秒数
+    FULL: 10,     // この秒数で一番むずかしくなる
+    WARN: 1.0,    // 柱の前ぶれの秒数
+    // 種類ごとの出やすさと、出始める秒(岩・板は最初から)
+    KINDS: [
+      { k: 'rock', w: 40, from: 0 }, { k: 'plank', w: 14, from: 0 },
+      { k: 'leaf', w: 12, from: 2 }, { k: 'accel', w: 10, from: 5 },
+      { k: 'split', w: 10, from: 6 }, { k: 'pillar', w: 9, from: 8 }
+    ],
+    GIANT_FROM: 3, GIANT_EVERY: 4   // 巨大岩は3秒から、だいたい4秒に1個
   };
 }
 
@@ -1376,33 +1411,120 @@ function dodgeMake(seed) {
   const C = dodgeCfg(), rnd = seededRng(seed), objs = [];
   let t = 0.7;
   while (t < C.DUR + 0.5) {
-    const d = Math.min(1, t / 12);
-    const plank = rnd() < 0.22;
-    const w = plank ? 0.2 + rnd() * 0.14 : 0.07 + rnd() * 0.05;
-    objs.push({
-      t, plank, w, h: plank ? 0.045 : w,
-      x: 0.05 + rnd() * 0.9,
-      vy: (0.71 + rnd() * 0.29) * (1 + 0.45 * d),   // 落ちる速さ(前より約15%速い)
-      vx: (rnd() - 0.5) * 0.28 * d
-    });
-    t += (0.52 - 0.35 * d) * (0.7 + rnd() * 0.6);  // 出る間隔(前より約20%短い=量が増える)
+    const d = Math.min(1, t / C.FULL);
+    const pool = C.KINDS.filter(q => t >= q.from);
+    let r = rnd() * pool.reduce((a, q) => a + q.w, 0), kind = pool[0].k;
+    for (const q of pool) { r -= q.w; if (r < 0) { kind = q.k; break; } }
+    const vy = (0.71 + rnd() * 0.29) * (1 + 0.45 * d) * 1.15;      // 落ちる速さ(v=19でさらに15%速く)
+    const vx = (rnd() - 0.5) * 0.39 * d;                             // ななめ(v=19で1.4倍)
+    const x = 0.05 + rnd() * 0.9;
+    const o = { t, kind, x, vy, vx };
+    if (kind === 'plank') { o.w = 0.2 + rnd() * 0.14; o.h = 0.045; }
+    else if (kind === 'rock') { o.w = o.h = 0.07 + rnd() * 0.05; }
+    else if (kind === 'leaf') { o.w = 0.085; o.h = 0.05; o.vy = vy * 0.62; o.vx = 0; o.amp = 0.08 + rnd() * 0.06; o.fq = 3 + rnd() * 1.5; o.ph = rnd() * 6.3; }
+    else if (kind === 'accel') { o.w = o.h = 0.075; o.vy = vy * 0.5; o.vy2 = vy * 2; o.ay = 0.25 + rnd() * 0.15; o.vx = 0; }
+    else if (kind === 'split') { o.w = o.h = 0.11; o.vx = 0; o.sy = 0.3 + rnd() * 0.15; o.svx = 0.26 + rnd() * 0.1; o.x = 0.15 + rnd() * 0.7; }
+    else if (kind === 'pillar') { o.w = 0.1; o.h = 0.32; o.vy = 2.3; o.vx = 0; o.x = 0.08 + rnd() * 0.84; }
+    objs.push(o);
+    t += (0.52 - 0.35 * d) * (0.7 + rnd() * 0.6) * 0.8;              // 出る間隔(v=19で量を25%増やす)
+  }
+  // 巨大岩(ゆっくり、幅の4割)
+  for (let g = C.GIANT_FROM + rnd() * 0.8; g < C.DUR - 1; g += C.GIANT_EVERY * (0.85 + rnd() * 0.3)) {
+    objs.push({ t: g, kind: 'giant', w: 0.4, h: 0.4, x: 0.2 + rnd() * 0.6, vy: 0.36 + rnd() * 0.08, vx: 0 });
+  }
+  objs.sort((a, b) => a.t - b.t);
+  // どうやってもよけられない場面があったら、その少し前に出た物を1つずつ減らす(全員同じ結果になる)
+  for (let tries = 0; tries < 12; tries++) {
+    const T = dodgeEscape(objs);
+    if (T >= C.DUR) break;
+    let k = -1;
+    for (let i = 0; i < objs.length; i++) if (objs[i].t < T && objs[i].t > T - 2.5 && objs[i].kind !== 'giant') k = i;
+    if (k < 0) for (let i = 0; i < objs.length; i++) if (objs[i].t < T) k = i;
+    if (k < 0) break;
+    objs.splice(k, 1);
   }
   return objs;
 }
 
-// 時間 e に、位置 px の自分が何かに当たっているか
+// 動ける場所を全部しらべて、何秒までなら生き残れる道があるかを返す(DUR なら、よけきれる)
+function dodgeEscape(objs) {
+  const C = dodgeCfg(), dt = 0.016, stp = 0.02;
+  const xs = [];
+  for (let x = 0.05; x <= 0.9501; x += stp) xs.push(x);
+  const reach = Math.floor(C.VMAX * dt / stp);
+  const pw = C.PW - 0.012, pt = C.WH - C.PH + 0.012;   // dodgeHit と同じ当たり判定
+  let R = xs.map(x => Math.abs(x - 0.5) < stp / 2 + 1e-9);
+  for (let t = dt; t <= C.DUR + 1e-9; t += dt) {
+    // この時刻に、自分の高さにある物の「当たる x のはんい」を先に集める
+    const iv = [];
+    for (let i = 0; i < objs.length; i++) {
+      const o = objs[i];
+      if (t - o.t < 0) break;
+      const k = (o.kind === 'plank' || o.kind === 'pillar') ? 0.96 : 0.85;
+      for (const b of dodgeBoxes(o, t - o.t)) {
+        const hw = b.hw * k, hh = b.hh * k;
+        if (b.y + hh > pt && b.y - hh < C.WH) iv.push(b.x - hw - pw, b.x + hw + pw);
+      }
+    }
+    const N = xs.map((x, i) => {
+      let ok = false;
+      for (let k = -reach; k <= reach && !ok; k++) ok = !!R[i + k];
+      if (!ok) return false;
+      for (let j = 0; j < iv.length; j += 2) if (x > iv[j] && x < iv[j + 1]) return false;
+      return true;
+    });
+    if (!N.some(Boolean)) return t;
+    R = N;
+  }
+  return C.DUR;
+}
+
+// その時の、物の当たり判定の箱(世界の座標、中心 x,y と半分の幅 hw,hh)。描くのにも使う
+function dodgeBoxes(o, age) {
+  const C = dodgeCfg();
+  if (age < 0) return [];
+  if (o.kind === 'pillar') {
+    if (age < C.WARN) return [];
+    const y = -o.h + o.vy * (age - C.WARN);
+    if (y > C.WH) return [];
+    return [{ k: 'pillar', x: o.x, y: y + o.h / 2, hw: o.w / 2, hh: o.h / 2 }];
+  }
+  if (o.kind === 'accel') {
+    const ta = (o.ay + o.h) / o.vy;                                   // 加速する時刻
+    const y = age < ta ? -o.h + o.vy * age : o.ay + o.vy2 * (age - ta);
+    if (y > C.WH) return [];
+    return [{ k: 'accel', x: o.x, y: y + o.h / 2, r: o.w / 2, hw: o.w / 2, hh: o.h / 2, hot: age > ta - 0.35 }];
+  }
+  if (o.kind === 'split') {
+    const y = -o.h + o.vy * age;
+    if (y > C.WH) return [];
+    const ts = (o.sy + o.h) / o.vy;                                   // 割れる時刻
+    if (age < ts) return [{ k: 'split', x: o.x, y: y + o.h / 2, r: o.w / 2, hw: o.w / 2, hh: o.h / 2 }];
+    const dx = o.svx * (age - ts), r = o.w * 0.36;
+    return [-1, 1].map(sg => ({ k: 'split', half: true, x: o.x + sg * (o.w * 0.25 + dx), y: y + o.h / 2, r, hw: r, hh: r }));
+  }
+  const y = -o.h + o.vy * age;
+  if (y > C.WH) return [];
+  if (o.kind === 'leaf') {
+    const sw = Math.sin(age * o.fq + o.ph);
+    return [{ k: 'leaf', x: Math.max(0.05, Math.min(0.95, o.x + o.amp * sw)), y: y + o.h / 2, hw: o.w / 2, hh: o.h / 2, rot: Math.cos(age * o.fq + o.ph) * 0.5 }];
+  }
+  const x = o.x + o.vx * age;
+  if (o.kind === 'plank') return [{ k: 'plank', x, y: y + o.h / 2, hw: o.w / 2, hh: o.h / 2 }];
+  return [{ k: o.kind, x, y: y + o.h / 2, r: o.w / 2, hw: o.w / 2, hh: o.h / 2 }];
+}
+
 function dodgeHit(objs, e, px) {
   const C = dodgeCfg();
   const pl = px - C.PW + 0.012, pr = px + C.PW - 0.012, pt = C.WH - C.PH + 0.012;
   for (let i = 0; i < objs.length; i++) {
     const o = objs[i], age = e - o.t;
     if (age < 0) break;                          // 出る順に並んでいるので、以降はまだ出ていない
-    const y = -o.h + o.vy * age;
-    if (y > C.WH) continue;
-    const k = o.plank ? 0.96 : 0.85;             // 当たり判定は見た目より少し小さめ
-    const hw = o.w / 2 * k, hh = o.h / 2 * k;
-    const cx = o.x + o.vx * age, cy = y + o.h / 2;
-    if (cx + hw > pl && cx - hw < pr && cy + hh > pt && cy - hh < C.WH) return true;
+    const k = (o.kind === 'plank' || o.kind === 'pillar') ? 0.96 : 0.85;   // 当たり判定は見た目より少し小さめ
+    for (const b of dodgeBoxes(o, age)) {
+      const hw = b.hw * k, hh = b.hh * k;
+      if (b.x + hw > pl && b.x - hw < pr && b.y + hh > pt && b.y - hh < C.WH) return true;
+    }
   }
   return false;
 }

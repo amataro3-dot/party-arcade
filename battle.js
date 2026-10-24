@@ -233,6 +233,7 @@ function renderRoundResult() {
   setApp(`
     <h1>${h(title)} の結果</h1>
     ${m > 1 ? `<div class="bonus">${bonusLabel(gi)} ポイント2倍</div>` : ''}
+    ${g.resultTop ? '<div class="card center" id="rtop"></div>' : ''}
     <div class="card">
       ${list.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (あなた)' : ''}</span><span class="val">${p.v === null ? '未提出' : h(g.fmt(p.v, p.x))}</span>${solo ? '' : `<span class="pt">+${p.pts}</span>`}${crown(p.id)}${hasRes(p) ? '<div class="viz" data-rp></div>' : ((g.viz && p.x !== undefined && p.v !== null) ? `<div class="viz">${g.viz(p.v, p.x)}</div>` : '')}</div>`).join('')}
     </div>
@@ -241,6 +242,7 @@ function renderRoundResult() {
       ${st.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (あなた)' : ''}</span><span class="tot">${p.total}</span></div>`).join('')}
     </div>`}
     ${actions}`);
+  if (g.resultTop) { try { g.resultTop($('#rtop'), room.round); } catch (e) { console.warn(e); } }   // ゲームごとの、結果のいちばん上(お手本など)
   const boxes = document.querySelectorAll('[data-rp]');
   list.filter(hasRes).forEach((p, i) => { if (boxes[i]) callResult(g, boxes[i], p.x); });
   if (isAdmin && solo) {

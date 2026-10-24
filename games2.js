@@ -1716,3 +1716,378 @@ function drawCurryResult(el, data, size) {
     ctx.fillText(m === 2 ? '◎' : m === 1 ? '○' : '×', cx, h * 0.02 + cell * 2);
   }
 }
+
+/* ============================================================
+   キレイに書けるかな?
+   国語ノートの十字マスに、お題のひらがな・カタカナを1文字書く。
+   お手本の線データとくらべて、形・大きさ・位置・画数・書き順・なめらかさで100点満点
+   ============================================================ */
+
+// お手本の線(0〜100の座標。x:右、y:下)。同じ点を2回続けると、そこは角(とがる)
+// 1画 = 点の列。線はなめらかにつないで描く
+const KANA_DATA = [
+  // ひらがな
+  ['あ', [[[22, 30], [72, 26]], [[44, 14], [45, 40], [47, 62], [50, 84]], [[66, 42], [58, 60], [45, 74], [32, 80], [24, 72], [28, 60], [45, 52], [62, 52], [76, 60], [80, 72], [72, 82], [60, 86]]]],
+  ['い', [[[28, 24], [26, 45], [28, 64], [33, 76], [38, 74]], [[66, 34], [74, 46], [78, 60]]]],
+  ['う', [[[38, 14], [58, 20]], [[30, 40], [48, 34], [64, 36], [70, 48], [64, 64], [52, 78], [40, 88]]]],
+  ['く', [[[64, 14], [36, 50], [36, 50], [64, 86]]]],
+  ['こ', [[[30, 28], [64, 26], [64, 26], [57, 34]], [[28, 66], [36, 76], [56, 78], [72, 74]]]],
+  ['し', [[[38, 14], [37, 50], [40, 72], [50, 80], [64, 76], [74, 64]]]],
+  ['つ', [[[18, 44], [42, 36], [62, 34], [78, 42], [80, 56], [68, 70], [50, 78]]]],
+  ['て', [[[20, 28], [50, 24], [76, 20], [76, 20], [56, 30], [44, 44], [42, 62], [50, 76], [64, 82]]]],
+  ['の', [[[52, 30], [44, 52], [34, 72], [24, 76], [18, 64], [22, 44], [38, 30], [56, 26], [74, 34], [82, 52], [76, 70], [58, 82]]]],
+  ['へ', [[[14, 58], [34, 36], [34, 36], [48, 46], [64, 60], [86, 76]]]],
+  ['も', [[[46, 14], [42, 40], [40, 62], [44, 78], [56, 82], [66, 74], [70, 62]], [[24, 34], [66, 32]], [[22, 54], [64, 52]]]],
+  ['ろ', [[[30, 22], [64, 20], [64, 20], [36, 50], [36, 50], [50, 46], [68, 50], [76, 62], [70, 76], [54, 84], [38, 82]]]],
+  ['る', [[[30, 22], [64, 20], [64, 20], [36, 50], [36, 50], [50, 46], [68, 50], [76, 62], [70, 76], [54, 84], [40, 82], [38, 72], [48, 68], [56, 76]]]],
+  ['ね', [[[34, 14], [34, 50], [34, 86]], [[16, 34], [42, 30], [42, 30], [22, 66], [16, 80], [36, 58], [56, 46], [72, 52], [76, 68], [70, 80], [58, 84], [52, 76], [60, 70], [70, 74], [80, 82]]]],
+  ['め', [[[30, 30], [42, 52], [52, 74]], [[62, 16], [54, 44], [40, 70], [28, 80], [20, 72], [24, 56], [42, 44], [62, 44], [78, 54], [78, 70], [66, 80], [56, 84]]]],
+  // カタカナ
+  ['ア', [[[20, 24], [78, 22], [78, 22], [70, 34], [58, 46]], [[46, 38], [46, 58], [40, 74], [28, 86]]]],
+  ['イ', [[[60, 14], [44, 36], [20, 58]], [[46, 40], [46, 88]]]],
+  ['ウ', [[[50, 12], [50, 26]], [[24, 26], [24, 44]], [[24, 28], [76, 28], [76, 28], [72, 52], [60, 72], [42, 86]]]],
+  ['エ', [[[24, 26], [76, 26]], [[50, 26], [50, 76]], [[16, 78], [84, 78]]]],
+  ['カ', [[[20, 36], [72, 34], [72, 34], [70, 56], [64, 76], [54, 86]], [[46, 14], [44, 48], [36, 70], [22, 86]]]],
+  ['キ', [[[22, 34], [76, 28]], [[18, 56], [82, 50]], [[44, 14], [50, 50], [56, 88]]]],
+  ['ク', [[[40, 14], [30, 32], [18, 46]], [[34, 26], [76, 26], [76, 26], [70, 50], [56, 70], [32, 88]]]],
+  ['コ', [[[24, 26], [74, 26], [74, 26], [74, 74]], [[24, 74], [74, 74]]]],
+  ['サ', [[[16, 38], [84, 38]], [[34, 18], [34, 64]], [[64, 16], [64, 56], [56, 74], [40, 88]]]],
+  ['ス', [[[22, 24], [72, 24], [72, 24], [58, 48], [40, 68], [18, 86]], [[54, 58], [72, 72], [84, 86]]]],
+  ['ト', [[[40, 12], [40, 88]], [[42, 42], [68, 56]]]],
+  ['ノ', [[[70, 14], [60, 44], [44, 68], [22, 86]]]],
+  ['ミ', [[[30, 18], [66, 28]], [[34, 42], [62, 50]], [[26, 66], [74, 82]]]],
+  ['ム', [[[46, 14], [34, 46], [22, 78], [22, 78], [76, 72]], [[62, 54], [72, 68], [80, 84]]]],
+  ['ロ', [[[24, 24], [24, 78]], [[24, 24], [76, 24], [76, 24], [76, 78]], [[24, 76], [76, 76]]]]
+];
+
+const kanaCfg = {
+  DUR: 15,          // 制限時間(秒)
+  // 点数の配分(合計100)
+  P_SHAPE: 40, P_SIZE: 15, P_POS: 15, P_COUNT: 10, P_ORDER: 10, P_SMOOTH: 10,
+  // 形: 線どうしのずれ(マスの幅=1)が SHAPE_OK 以下なら満点、SHAPE_OK+SHAPE_RANGE で0点
+  SHAPE_OK: 0.008, SHAPE_RANGE: 0.067,
+  SIZE_FREE: 0.08, SIZE_RANGE: 0.55,  // 大きさ: |log(自分/お手本)| がこれ以下で満点 / この分で0点
+  POS_OK: 0.025, POS_RANGE: 0.17,     // 位置: 中心のずれ
+  SMOOTH_OK: 0.0004, SMOOTH_RANGE: 0.0014, // なめらかさ: ふるえの大きさ(真ん中の値)
+  INK: 0.075,       // お手本の線の太さ(マスの幅に対して)
+  PEN: 0.05         // 書くときの線の太さ
+};
+
+// お題を決める。種が同じなら全員同じ
+function kanaPick(seed) {
+  const rnd = seededRng(seed);
+  rnd(); rnd();
+  return Math.floor(rnd() * KANA_DATA.length);
+}
+
+// 点の列(0〜1)をなめらかな線にして、細かい点の列にする。同じ点が続いたところは角
+function kanaSmooth(pts) {
+  const out = [];
+  const pieces = [[]];
+  pts.forEach((p, i) => {
+    const prev = pts[i - 1];
+    if (prev && prev[0] === p[0] && prev[1] === p[1]) { pieces.push([p]); return; }
+    pieces[pieces.length - 1].push(p);
+  });
+  pieces.forEach(pc => {
+    if (pc.length === 1) { out.push(pc[0]); return; }
+    for (let i = 0; i < pc.length - 1; i++) {
+      const p0 = pc[Math.max(0, i - 1)], p1 = pc[i], p2 = pc[i + 1], p3 = pc[Math.min(pc.length - 1, i + 2)];
+      for (let k = 0; k < 8; k++) {                         // Catmull-Rom
+        const t = k / 8, t2 = t * t, t3 = t2 * t;
+        out.push([0, 1].map(j => 0.5 * (2 * p1[j] + (-p0[j] + p2[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t2 + (-p0[j] + 3 * p1[j] - 3 * p2[j] + p3[j]) * t3)));
+      }
+    }
+    out.push(pc[pc.length - 1]);
+  });
+  return out;
+}
+// お手本の各画(0〜1の細かい点の列)
+const kanaRef = (() => {
+  const cache = {};
+  return i => cache[i] || (cache[i] = KANA_DATA[i][1].map(st => kanaSmooth(st.map(p => [p[0] / 100, p[1] / 100]))));
+})();
+
+// 線を、だいたい d ごとの点に並べ直す
+function kanaResample(pts, d) {
+  if (!pts.length) return [];
+  const out = [pts[0]];
+  let carry = 0;
+  for (let i = 1; i < pts.length; i++) {
+    let [x0, y0] = pts[i - 1];
+    const [x1, y1] = pts[i];
+    let seg = Math.hypot(x1 - x0, y1 - y0);
+    if (seg === 0) continue;
+    let pos = d - carry;
+    while (pos <= seg) {
+      const t = pos / seg;
+      out.push([x0 + (x1 - x0) * t, y0 + (y1 - y0) * t]);
+      pos += d;
+    }
+    carry = seg - (pos - d);
+  }
+  const last = pts[pts.length - 1], lo = out[out.length - 1];
+  if (Math.hypot(last[0] - lo[0], last[1] - lo[1]) > d * 0.3) out.push(last);
+  return out;
+}
+
+function kanaBox(strokes) {
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  strokes.forEach(s => s.forEach(([x, y]) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }));
+  return { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, size: Math.max(x1 - x0, y1 - y0, 0.02) };
+}
+// 字の外わくの中心を(0.5,0.5)、大きさを0.7にそろえる(形だけをくらべるため)
+function kanaNorm(strokes, box) {
+  const k = 0.7 / box.size;
+  return strokes.map(s => s.map(([x, y]) => [0.5 + (x - box.cx) * k, 0.5 + (y - box.cy) * k]));
+}
+// a の点から b の点までの、いちばん近い距離の平均
+function kanaNear(a, b) {
+  if (!a.length || !b.length) return 1;
+  let sum = 0;
+  for (const p of a) {
+    let m = 1e9;
+    for (const q of b) { const d = (p[0] - q[0]) ** 2 + (p[1] - q[1]) ** 2; if (d < m) m = d; }
+    sum += Math.sqrt(m);
+  }
+  return sum / a.length;
+}
+const kanaClamp = v => Math.max(0, Math.min(1, v));
+
+// 採点。user = 画の配列(各画は 0〜1 の [x,y] の列)
+// 返す値: { total, sc: [形, 大きさ, 位置, 画数, 書き順, なめらかさ] }
+function kanaScore(ci, user) {
+  const C = kanaCfg;
+  const ref = kanaRef(ci);
+  user = user.filter(s => s.length);
+  if (!user.length) return { total: 0, sc: [0, 0, 0, 0, 0, 0] };
+  const SP = 0.012;
+  // 点だけの画(タップ)も、小さな線として扱う
+  const uR = user.map(s => s.length === 1 ? [s[0], [s[0][0] + 0.004, s[0][1] + 0.004]] : s).map(s => kanaResample(s, SP));
+  const rR = ref.map(s => kanaResample(s, SP));
+  const uBox = kanaBox(uR), rBox = kanaBox(rR);
+  const uN = kanaNorm(uR, uBox), rN = kanaNorm(rR, rBox);
+  const uAll = [].concat(...uN), rAll = [].concat(...rN);
+  // 形: おたがいの線にどれだけ近いか(両方向の大きい方。らくがきで全体をぬりつぶしてもダメ)
+  const dist = Math.max(kanaNear(uAll, rAll), kanaNear(rAll, uAll));
+  const fShape = kanaClamp(1 - (dist - C.SHAPE_OK) / C.SHAPE_RANGE);
+  // 大きさ・位置
+  const fSize = kanaClamp(1 - (Math.abs(Math.log(uBox.size / rBox.size)) - C.SIZE_FREE) / C.SIZE_RANGE);
+  const fPos = kanaClamp(1 - (Math.hypot(uBox.cx - rBox.cx, uBox.cy - rBox.cy) - C.POS_OK) / C.POS_RANGE);
+  // 画数
+  const n = uN.length, m = rN.length;
+  const fCount = n === m ? 1 : Math.abs(n - m) === 1 ? 0.5 : 0;
+  // 書き順と向き: i画目が、お手本の i画目にいちばん近くて、書き始めがお手本の書き始め側なら正解
+  let ord = 0;
+  for (let i = 0; i < Math.min(n, m); i++) {
+    const u = uN[i];
+    let best = -1, bd = 1e9;
+    rN.forEach((r, j) => { const d = (kanaNear(u, r) + kanaNear(r, u)) / 2; if (d < bd) { bd = d; best = j; } });
+    if (best === i) ord += 0.5;
+    const r = rN[i], us = u[0], ue = u[u.length - 1], rs = r[0], re = r[r.length - 1];
+    const same = Math.hypot(us[0] - rs[0], us[1] - rs[1]) + Math.hypot(ue[0] - re[0], ue[1] - re[1]);
+    const swap = Math.hypot(us[0] - re[0], us[1] - re[1]) + Math.hypot(ue[0] - rs[0], ue[1] - rs[1]);
+    if (same <= swap) ord += 0.5;
+  }
+  const fOrder = ord / Math.max(n, m);
+  // なめらかさ: 線を少しならした形と、どれだけずれているか(ふるえ)。角で点が下がらないように真ん中の値を使う
+  const js = [];
+  user.forEach(s => {
+    const r = kanaResample(s, 0.006);
+    for (let i = 2; i < r.length - 2; i++) {
+      let ax = 0, ay = 0;
+      for (let k = -2; k <= 2; k++) { ax += r[i + k][0]; ay += r[i + k][1]; }
+      js.push(Math.hypot(r[i][0] - ax / 5, r[i][1] - ay / 5));
+    }
+  });
+  js.sort((a, b) => a - b);
+  const fSmooth = js.length ? kanaClamp(1 - (js[js.length >> 1] - C.SMOOTH_OK) / C.SMOOTH_RANGE) : 1;
+  // 形が大きくちがう(別の字・らくがき)ときは、ほかの項目も減らす
+  const k = Math.min(1, fShape / 0.5);
+  const sc = [C.P_SHAPE * fShape, C.P_SIZE * fSize * k, C.P_POS * fPos * k, C.P_COUNT * fCount * k, C.P_ORDER * fOrder * k, C.P_SMOOTH * fSmooth * k];
+  const total = sc.reduce((a, b) => a + b, 0);
+  return { total, sc };
+}
+
+// 線を描く(ps: 0〜1 の点の列、size: マスの大きさ)
+function kanaStroke(ctx, ps, ox, oy, size, width, color) {
+  ctx.strokeStyle = color; ctx.fillStyle = color;
+  ctx.lineWidth = width; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (ps.length === 1) { ctx.beginPath(); ctx.arc(ox + ps[0][0] * size, oy + ps[0][1] * size, width / 2, 0, Math.PI * 2); ctx.fill(); return; }
+  ctx.beginPath();
+  ps.forEach(([x, y], i) => i ? ctx.lineTo(ox + x * size, oy + y * size) : ctx.moveTo(ox + x * size, oy + y * size));
+  ctx.stroke();
+}
+// ノートのマス(外わく + 十字の点線)
+function kanaCell(ctx, ox, oy, size, light) {
+  ctx.fillStyle = light ? '#fbfaf3' : '#f6f3e6';
+  ctx.fillRect(ox, oy, size, size);
+  ctx.strokeStyle = '#7fae8a'; ctx.lineWidth = Math.max(1.5, size * 0.008); ctx.setLineDash([]);
+  ctx.strokeRect(ox, oy, size, size);
+  ctx.strokeStyle = 'rgba(127,174,138,0.6)'; ctx.lineWidth = Math.max(1, size * 0.004);
+  ctx.setLineDash([size * 0.02, size * 0.02]);
+  ctx.beginPath(); ctx.moveTo(ox + size / 2, oy); ctx.lineTo(ox + size / 2, oy + size); ctx.moveTo(ox, oy + size / 2); ctx.lineTo(ox + size, oy + size / 2); ctx.stroke();
+  ctx.setLineDash([]);
+}
+// お手本を描く
+function kanaDrawRef(ctx, ci, ox, oy, size) {
+  kanaCell(ctx, ox, oy, size);
+  kanaRef(ci).forEach(st => kanaStroke(ctx, st, ox, oy, size, size * kanaCfg.INK, '#1d2033'));
+}
+// 補足データの線(0〜1000の整数を並べたもの)を、0〜1の点の列に戻す
+function kanaUnpack(x) {
+  const ss = x && x.s ? (Array.isArray(x.s) ? x.s : Object.values(x.s)) : [];
+  return ss.map(f => { f = Array.isArray(f) ? f : Object.values(f || {}); const o = []; for (let i = 0; i + 1 < f.length; i += 2) o.push([f[i] / 1000, f[i + 1] / 1000]); return o; });
+}
+
+GAMES.push({
+  id: 'kana', title: 'キレイに書けるかな?',
+  desc: 'お手本のひらがな・カタカナを、ノートのマスにキレイに書こう!<br>指で1画ずつ書いてね。「1画もどす」「全部消す」で書き直しOK。書けたら「決定」。<br>形・大きさ・位置・画数・書き順・なめらかさで100点満点。15秒。',
+  lowerBetter: false, miss: 0,
+  isMiss: v => v <= 0,
+  fmt: v => Math.floor(v) + '点',
+  play: playKana,
+  // リザルト用:自分の字(大きいときは、お手本とならべて項目ごとの点も出す)
+  result: drawKanaResult,
+  // 結果画面のいちばん上に出す、そのラウンドのお手本
+  resultTop: (el, round) => {
+    const ci = kanaPick(Math.round(((round && round.delay) || 3000) * 1000));
+    el.innerHTML = '<div class="sub">お手本「' + KANA_DATA[ci][0] + '」</div>';
+    const size = 110, dpr = window.devicePixelRatio || 1;
+    const cv = document.createElement('canvas');
+    cv.width = size * dpr; cv.height = size * dpr; cv.style.width = cv.style.height = size + 'px'; cv.style.display = 'block'; cv.style.margin = '6px auto 0';
+    const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+    kanaDrawRef(ctx, ci, 1, 1, size - 2);
+    el.appendChild(cv);
+  }
+});
+
+function playKana(stage, round, submit) {
+  const game = GAMES.find(g => g.id === 'kana');
+  const C = kanaCfg;
+  const ci = kanaPick(Math.round((round.delay || 3000) * 1000));
+  const ch = KANA_DATA[ci][0];
+
+  countdown(stage, game, round, () => {
+    const bs = 'flex:1;padding:12px 0;font-size:16px;margin:0';
+    stage.innerHTML =
+      `<div style="display:flex;align-items:center;gap:12px;margin:0 0 6px">` +
+      `<canvas id="ref" style="width:84px;height:84px;flex:none"></canvas>` +
+      `<div style="flex:1"><div class="sub">お手本どおりに書こう</div><div style="font-size:15px">画数 <b id="cnt" style="color:#ffcc33;font-size:20px">0</b> ・ 残り <b id="left">${C.DUR.toFixed(1)}</b> 秒</div></div></div>` +
+      `<canvas id="pad" style="display:block;margin:0 auto;touch-action:none;border-radius:6px"></canvas>` +
+      `<div style="display:flex;gap:8px;margin-top:10px">` +
+      `<button class="btn ghost" id="undo" style="${bs}">1画もどす</button><button class="btn ghost" id="clr" style="${bs}">全部消す</button><button class="btn" id="ok" style="${bs};font-weight:800">決定</button></div>`;
+    // お手本
+    const rc = stage.querySelector('#ref');
+    const dpr = window.devicePixelRatio || 1;
+    rc.width = rc.height = 84 * dpr;
+    const rctx = rc.getContext('2d'); rctx.scale(dpr, dpr);
+    kanaDrawRef(rctx, ci, 1, 1, 82);
+    // 書くマス(正方形)
+    const cv = stage.querySelector('#pad');
+    const sw = stage.getBoundingClientRect().width;
+    const size = Math.floor(Math.min(sw, window.innerHeight * 0.5, 420));
+    cv.style.width = cv.style.height = size + 'px';
+    cv.width = cv.height = size * dpr;
+    const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+    const cntEl = stage.querySelector('#cnt'), leftEl = stage.querySelector('#left');
+
+    const strokes = [];
+    let cur = null, pid = null, done = false;
+    const draw = () => {
+      ctx.clearRect(0, 0, size, size);
+      kanaCell(ctx, 0, 0, size, true);
+      strokes.forEach(s => kanaStroke(ctx, s, 0, 0, size, size * C.PEN, '#1d2033'));
+      cntEl.textContent = strokes.length;
+    };
+    const pt = ev => {
+      const b = cv.getBoundingClientRect();
+      return [Math.max(0, Math.min(1, (ev.clientX - b.left) / b.width)), Math.max(0, Math.min(1, (ev.clientY - b.top) / b.height))];
+    };
+    cv.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      if (done || pid !== null) return;
+      pid = ev.pointerId;
+      try { cv.setPointerCapture(pid); } catch (e) { }
+      cur = [pt(ev)]; strokes.push(cur); draw();
+    });
+    cv.addEventListener('pointermove', ev => {
+      if (done || ev.pointerId !== pid || !cur) return;
+      ev.preventDefault();
+      const evs = ev.getCoalescedEvents ? ev.getCoalescedEvents() : [ev];
+      (evs.length ? evs : [ev]).forEach(e2 => {
+        const p = pt(e2), l = cur[cur.length - 1];
+        if (Math.hypot(p[0] - l[0], p[1] - l[1]) > 0.003) cur.push(p);
+      });
+      draw();
+    });
+    const up = ev => { if (ev.pointerId !== pid) return; pid = null; cur = null; draw(); };
+    cv.addEventListener('pointerup', up);
+    cv.addEventListener('pointercancel', up);
+
+    const btn = (id, fn) => stage.querySelector(id).addEventListener('pointerdown', ev => { ev.preventDefault(); if (!done) fn(); });
+    btn('#undo', () => { if (pid !== null) return; strokes.pop(); draw(); });
+    btn('#clr', () => { if (pid !== null) return; strokes.length = 0; draw(); });
+    btn('#ok', () => { if (strokes.length) finish(); });
+
+    const finish = () => {
+      if (done) return;
+      done = true; pid = null;
+      const r = kanaScore(ci, strokes);
+      // 補足データ: 線(間引いて0〜1000の整数に)と、項目ごとの点
+      const s = strokes.filter(st => st.length).slice(0, 12).map(st => {
+        const rs = st.length > 1 ? kanaResample(st, 0.02) : st;
+        const f = []; rs.slice(0, 80).forEach(([x, y]) => f.push(Math.round(x * 1000), Math.round(y * 1000)));
+        return f;
+      });
+      const v = Math.round(r.total * 100) / 100;
+      ['#undo', '#clr', '#ok'].forEach(id => { stage.querySelector(id).style.opacity = '0.4'; });
+      submit(v, { c: ci, s, sc: r.sc.map(a => Math.round(a * 10) / 10) });
+    };
+
+    const t0 = performance.now();
+    draw();
+    const iv = setInterval(() => {
+      if (done) return;
+      const e = (performance.now() - t0) / 1000;
+      leftEl.textContent = Math.max(0, C.DUR - e).toFixed(1);
+      if (e >= C.DUR) finish();
+    }, 50);
+    timers.push(iv);
+  });
+}
+
+// リザルト用。size が大きい(自分の記録・練習)ときは、お手本と自分の字をならべて、項目ごとの点も出す
+function drawKanaResult(el, data, size) {
+  if (!data) return;
+  const ci = Number(data.c) || 0;
+  const user = kanaUnpack(data);
+  const big = (size || 90) >= 150;
+  const cell = big ? 120 : 64;
+  const w = big ? cell * 2 + 24 : cell, h = cell + (big ? 18 : 0);
+  const dpr = window.devicePixelRatio || 1;
+  const cv = document.createElement('canvas');
+  cv.width = w * dpr; cv.height = h * dpr; cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+  const ink = cell * kanaCfg.PEN;
+  let ux = 0;
+  if (big) {
+    ctx.fillStyle = '#9aa3c7'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('お手本', cell / 2, 0); ctx.fillText('あなた', cell * 1.5 + 24, 0);
+    kanaDrawRef(ctx, ci, 0, 18, cell);
+    ux = cell + 24;
+  }
+  const uy = big ? 18 : 0;
+  kanaCell(ctx, ux, uy, cell, true);
+  user.forEach(s => kanaStroke(ctx, s, ux, uy, cell, ink, '#1d2033'));
+  el.appendChild(cv);
+  if (big && data.sc) {
+    const sc = Array.isArray(data.sc) ? data.sc : Object.values(data.sc);
+    const C = kanaCfg;
+    const names = [['形', C.P_SHAPE], ['大きさ', C.P_SIZE], ['位置', C.P_POS], ['画数', C.P_COUNT], ['書き順', C.P_ORDER], ['なめらか', C.P_SMOOTH]];
+    const d = document.createElement('div');
+    d.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 10px;margin:8px auto 0;max-width:280px;font-size:13px;color:#9aa3c7';
+    d.innerHTML = names.map(([n, mx], i) => `<div>${n} <b style="color:#f2f4ff">${Math.round(sc[i] || 0)}</b>/${mx}</div>`).join('');
+    el.appendChild(d);
+  }
+}
