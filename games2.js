@@ -2036,7 +2036,9 @@ function playKana(stage, round, submit) {
       const r = kanaScore(ci, strokes);
       // 補足データ: 線(間引いて0〜1000の整数に)と、項目ごとの点
       const s = strokes.filter(st => st.length).slice(0, 12).map(st => {
-        const rs = st.length > 1 ? kanaResample(st, 0.02) : st;
+        // 長い線も最後まで残るように、点の間隔を広げて80個以内にする
+        let len = 0; for (let i = 1; i < st.length; i++) len += Math.hypot(st[i][0] - st[i - 1][0], st[i][1] - st[i - 1][1]);
+        const rs = st.length > 1 ? kanaResample(st, Math.max(0.02, len / 78)) : st;
         const f = []; rs.slice(0, 80).forEach(([x, y]) => f.push(Math.round(x * 1000), Math.round(y * 1000)));
         return f;
       });
