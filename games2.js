@@ -1057,7 +1057,7 @@ function drawHamburgResult(el, data, size) {
 GAMES.push(
   {
     id: 'daruma', title: 'だるまさんがころんだ!',
-    desc: 'ボタンを押している間だけ歩くよ。長く押すほど速くなる!<br>でも速いときに離すと、ズザッと少し滑ってから止まる。<br>鬼が振り向いたときに動いていたら、バレてアウト!<br>15秒すぎても、鬼が言い終わるまではラストチャンス。鬼にタッチでゴール、近いほど上位。',
+    desc: '車みたいに走ろう! 「ダッシュ」を押している間は加速、離してもすぐには止まらない。<br>止まりたいときは「ブレーキ」! 両方押すとブレーキが勝つ。<br>鬼が振り向いたときに動いていたら、バレてアウト!<br>15秒すぎても、鬼が言い終わるまではラストチャンス。鬼にタッチでゴール、近いほど上位。',
     lowerBetter: true, miss: 99,
     isMiss: v => v >= 99,
     fmt: (v, x) => {
@@ -1105,11 +1105,11 @@ function wideCanvas(el, size, wr, hr) {
 // 難しさの設定(ここを変えると難しさが変わる)
 function darumaCfg() {
   return {
-    DIST: 15,       // 鬼までの距離(m)
-    V0: 0.6,        // 押し始めの速さ(m/秒)
-    VMAX: 2.0,      // いちばん速いとき(m/秒)
-    RAMP: 1.5,      // V0 から VMAX になるまで押し続ける秒数
-    SLIDE: 0.45,    // VMAX で離したときに滑る秒数(V0 なら滑らない。あいだは比例)
+    DIST: 25,       // 鬼までの距離(m)
+    VMAX: 3.5,      // いちばん速いとき(m/秒)
+    ACC: 2.9,       // ダッシュを押している間の加速(m/秒²)。0から約1.2秒で最高速
+    COAST: 2.0,     // 何も押さないときの減速(m/秒²)。最高速から約1.7秒・約3mで止まる
+    BRAKE: 12,      // ブレーキの減速(m/秒²)。最高速から約0.3秒・約0.5mで止まる
     GRACE: 0.2,     // 振り向いてからセーフの秒数
     DUR: 15,        // 制限時間(秒)。最後の「だるまさんがころんだ」はこれをまたぐ
     LAST_MIN: 15.3, LAST_MAX: 17.2,   // 最後の「だ!」の時刻のはんい(秒)
@@ -1180,22 +1180,23 @@ function playDaruma(stage, round, submit) {
   const C = darumaCfg();
   const calls = darumaMake(Math.round((round.delay || 3000) * 1000));
   const END = calls[calls.length - 1].w;                   // ゲームが終わる時刻(15〜18秒)
-  const ACC = (C.VMAX - C.V0) / C.RAMP;                    // 押している間の加速
 
   countdown(stage, game, round, () => {
+    const bstyle = 'flex:1;height:min(24vh,150px);min-height:96px;border-radius:22px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:22px;font-weight:800;line-height:1.3;color:#fff;border:4px solid rgba(255,255,255,0.3);user-select:none;-webkit-user-select:none;touch-action:none';
     stage.innerHTML =
       `<div class="center sub" id="top" style="font-size:18px;margin:2px 0">あと <b id="rem" style="color:#ffcc33;font-size:26px">${C.DIST.toFixed(1)}</b> m ・ 残り <b id="left">${C.DUR.toFixed(1)}</b> 秒<b id="last" style="color:#ff5c6c;margin-left:6px"></b></div>` +
-      `<canvas id="pad" style="display:block;width:100%;height:47vh;margin-top:4px;touch-action:none"></canvas>` +
-      `<div style="height:8px;margin:6px 18% 0;border-radius:4px;background:rgba(255,255,255,0.12);overflow:hidden"><div id="spd" style="height:100%;width:0;background:#35d07f"></div></div>` +
-      `<div style="display:flex;justify-content:center;margin-top:8px;-webkit-tap-highlight-color:transparent">` +
-      `<div id="walk" style="width:min(56vw,24vh);height:min(56vw,24vh);min-width:120px;min-height:120px;border-radius:50%;display:flex;align-items:center;justify-content:center;text-align:center;font-size:22px;font-weight:800;line-height:1.3;background:#4c8dff;color:#fff;border:4px solid rgba(255,255,255,0.35);user-select:none;-webkit-user-select:none;touch-action:none">押して<br>歩く</div></div>`;
+      `<canvas id="pad" style="display:block;width:100%;height:45vh;margin-top:4px;touch-action:none"></canvas>` +
+      `<div style="display:flex;align-items:center;gap:10px;margin:6px 6% 0"><div style="flex:1;height:10px;border-radius:5px;background:rgba(255,255,255,0.12);overflow:hidden"><div id="spd" style="height:100%;width:0;background:#35d07f"></div></div><div style="width:84px;text-align:right;font-size:15px"><b id="kmh" style="font-size:20px">0</b> km/h</div></div>` +
+      `<div style="display:flex;gap:14px;margin-top:10px;-webkit-tap-highlight-color:transparent">` +
+      `<div id="brk" style="${bstyle};background:#c8323f">ブレーキ</div>` +
+      `<div id="acc" style="${bstyle};background:#4c8dff"><div>ダッシュ<div style="font-size:13px;font-weight:600">長押しで加速</div></div></div></div>`;
     const cv = stage.querySelector('#pad');
     const top = stage.querySelector('#top');
     const remEl = stage.querySelector('#rem');
     const leftEl = stage.querySelector('#left');
     const lastEl = stage.querySelector('#last');
-    const spdEl = stage.querySelector('#spd');
-    const walk = stage.querySelector('#walk');
+    const spdEl = stage.querySelector('#spd'), kmhEl = stage.querySelector('#kmh');
+    const accB = stage.querySelector('#acc'), brkB = stage.querySelector('#brk');
     const dpr = window.devicePixelRatio || 1;
     const rect = cv.getBoundingClientRect();
     const W = rect.width, H = rect.height;
@@ -1205,18 +1206,19 @@ function playDaruma(stage, round, submit) {
 
     const oy = H * 0.38, sy = H * 0.93;          // 鬼の足もと・スタートの足もと(画面のy)
     const t0 = performance.now();
-    const fingers = new Set();
-    let pos = 0, v = 0, dec = 0, prevE = 0;      // 位置・速さ・滑っているときの減速
+    const held = { acc: new Set(), brk: new Set() };
+    let pos = 0, v = 0, prevE = 0, skidUntil = -1;
     let done = false, caught = false, goal = false, iv = null;
+    const skids = [];                            // ブレーキのあと(位置)
     const now = () => (performance.now() - t0) / 1000;
-    const holding = () => fingers.size > 0;
+    const braking = () => held.brk.size > 0;
+    const accel = () => held.acc.size > 0 && !braking();   // 両方押したらブレーキが勝つ
 
     const look = () => {
-      const on = holding() && !done;
-      walk.style.background = done ? 'rgba(76,141,255,0.35)' : on ? '#ffcc33' : '#4c8dff';
-      walk.style.color = on ? '#1a1f3a' : '#fff';
-      walk.style.transform = on ? 'scale(0.95)' : '';
-      walk.innerHTML = on ? '歩いてる…' : '押して<br>歩く';
+      const a = accel() && !done, b = braking() && !done;
+      accB.style.transform = a ? 'scale(0.95)' : ''; accB.style.filter = a ? 'brightness(1.25)' : '';
+      brkB.style.transform = b ? 'scale(0.95)' : ''; brkB.style.filter = b ? 'brightness(1.25)' : '';
+      accB.style.opacity = brkB.style.opacity = done ? '0.35' : '1';
     };
 
     const finish = (t, how) => {
@@ -1238,17 +1240,9 @@ function playDaruma(stage, round, submit) {
     const step = e => {
       const dt = Math.max(0, Math.min(0.1, e - prevE));
       prevE = e;
-      if (holding()) {
-        if (v < C.V0) v = C.V0;
-        v = Math.min(C.VMAX, v + ACC * dt);
-        dec = 0;
-      } else if (v > 0) {
-        if (!dec) {                                           // 離した瞬間: 速さに合わせて滑る時間を決める
-          const ts = C.SLIDE * (v - C.V0) / (C.VMAX - C.V0);
-          if (ts <= 0.01) { v = 0; } else dec = v / ts;
-        }
-        if (dec) { v = Math.max(0, v - dec * dt); if (v === 0) dec = 0; }
-      }
+      if (accel()) v = Math.min(C.VMAX, v + C.ACC * dt);
+      else if (braking()) { if (v > 0) { skidUntil = e + 0.25; if (!skids.length || pos - skids[skids.length - 1] > 0.15) skids.push(pos); } v = Math.max(0, v - C.BRAKE * dt); }
+      else v = Math.max(0, v - C.COAST * dt);
       pos += v * dt;
       if (pos >= C.DIST) { pos = C.DIST; finish(e, 'goal'); return; }
       const st = darumaState(calls, e);
@@ -1256,23 +1250,25 @@ function playDaruma(stage, round, submit) {
       if (e >= END) finish(END, 'time');
     };
 
-    walk.addEventListener('pointerdown', ev => {
-      ev.preventDefault();
-      if (done) return;
-      try { walk.setPointerCapture(ev.pointerId); } catch (e) { }
-      step(now());                                             // ここまでの分を先に進める
-      fingers.add(ev.pointerId); look();
-      if (!done) step(now());
-    });
-    const up = ev => {
-      if (!fingers.has(ev.pointerId)) return;
-      if (!done) step(now());
-      fingers.delete(ev.pointerId); look();
+    const bind = (el, key) => {
+      el.addEventListener('pointerdown', ev => {
+        ev.preventDefault();
+        if (done) return;
+        try { el.setPointerCapture(ev.pointerId); } catch (e) { }
+        step(now());                                           // ここまでの分を先に進める
+        held[key].add(ev.pointerId); look();
+      });
+      const up = ev => {
+        if (!held[key].has(ev.pointerId)) return;
+        if (!done) step(now());
+        held[key].delete(ev.pointerId); look();
+      };
+      el.addEventListener('pointerup', up);
+      el.addEventListener('pointercancel', up);
+      el.addEventListener('lostpointercapture', up);
+      el.addEventListener('contextmenu', ev => ev.preventDefault());
     };
-    walk.addEventListener('pointerup', up);
-    walk.addEventListener('pointercancel', up);
-    walk.addEventListener('lostpointercapture', up);
-    walk.addEventListener('contextmenu', ev => ev.preventDefault());
+    bind(accB, 'acc'); bind(brkB, 'brk');
 
     const draw = e => {
       ctx.clearRect(0, 0, W, H);
@@ -1280,8 +1276,20 @@ function playDaruma(stage, round, submit) {
       // 道
       ctx.fillStyle = 'rgba(255,255,255,0.05)';
       ctx.beginPath(); ctx.moveTo(W * 0.38, oy); ctx.lineTo(W * 0.62, oy); ctx.lineTo(W * 0.8, H); ctx.lineTo(W * 0.2, H); ctx.closePath(); ctx.fill();
+      // 道の目じるし(5mごと)。走ると流れて見える
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)'; ctx.lineWidth = 2;
+      for (let m = 5; m < C.DIST; m += 5) {
+        const f = m / C.DIST, y = sy + (oy + H * 0.02 - sy) * f, hw = W * (0.3 - 0.12 * f);
+        ctx.beginPath(); ctx.moveTo(W / 2 - hw, y); ctx.lineTo(W / 2 - hw + W * 0.05, y); ctx.moveTo(W / 2 + hw, y); ctx.lineTo(W / 2 + hw - W * 0.05, y); ctx.stroke();
+      }
       ctx.strokeStyle = 'rgba(255,204,51,0.6)'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(W * 0.25, sy); ctx.lineTo(W * 0.75, sy); ctx.stroke();
+      // ブレーキのあと
+      ctx.fillStyle = 'rgba(30,30,30,0.55)';
+      skids.forEach(p => {
+        const f = p / C.DIST, y = sy + (oy + H * 0.02 - sy) * f, sc = 1 - 0.45 * f, kh = H * 0.17 * sc;
+        ctx.fillRect(W / 2 - kh * 0.12, y - 2, kh * 0.07, 4); ctx.fillRect(W / 2 + kh * 0.05, y - 2, kh * 0.07, 4);
+      });
       // 木と鬼
       ctx.fillStyle = '#6b4a2e'; ctx.fillRect(W / 2 + H * 0.07, oy - H * 0.2, H * 0.035, H * 0.2);
       ctx.fillStyle = '#2f7a48'; ctx.beginPath(); ctx.arc(W / 2 + H * 0.087, oy - H * 0.2, H * 0.065, 0, Math.PI * 2); ctx.fill();
@@ -1302,15 +1310,24 @@ function playDaruma(stage, round, submit) {
       const f = pos / C.DIST;
       const y = sy + (oy + H * 0.02 - sy) * f, sc = 1 - 0.45 * f;
       const kh = H * 0.17 * sc;
-      const sliding = !holding() && v > 0 && !done;
-      if (sliding) {                               // 滑っているときの土けむり
-        ctx.fillStyle = 'rgba(214,190,150,0.55)';
-        for (let i = 0; i < 4; i++) {
+      const skid = !done && e < skidUntil && v > 0;
+      const coasting = !done && !accel() && !braking() && v > 0.3;
+      if (skid || coasting) {                     // 土けむり(ブレーキは多め)
+        ctx.fillStyle = skid ? 'rgba(214,190,150,0.7)' : 'rgba(214,190,150,0.4)';
+        for (let i = 0; i < (skid ? 6 : 3); i++) {
           const a = (e * 7 + i * 1.7) % 1;
           ctx.beginPath(); ctx.arc(W / 2 + (i % 2 ? 1 : -1) * kh * (0.18 + a * 0.35), y + kh * 0.04 - a * kh * 0.15, kh * (0.06 + a * 0.08), 0, Math.PI * 2); ctx.fill();
         }
       }
-      drawDarumaKid(ctx, W / 2, y, kh, Math.floor(pos / 0.36), done && caught, goal, sliding);
+      // 速いときは、うしろに風の線
+      if (!done && v > 1.5) {
+        ctx.strokeStyle = `rgba(242,244,255,${0.12 + 0.25 * (v - 1.5) / (C.VMAX - 1.5)})`; ctx.lineWidth = 2;
+        for (let i = 0; i < 4; i++) {
+          const xx = W / 2 + (i - 1.5) * kh * 0.22, yy = y + kh * 0.15 + ((e * 9 + i * 0.37) % 1) * kh * 0.4;
+          ctx.beginPath(); ctx.moveTo(xx, yy); ctx.lineTo(xx, yy + kh * 0.25); ctx.stroke();
+        }
+      }
+      drawDarumaKid(ctx, W / 2, y, kh, Math.floor(pos / 0.5), done && caught, goal, skid);
     };
 
     const tick = () => {
@@ -1322,7 +1339,8 @@ function playDaruma(stage, round, submit) {
       leftEl.textContent = Math.max(0, C.DUR - e).toFixed(1);
       lastEl.textContent = e >= C.DUR ? 'ラスト!' : '';
       spdEl.style.width = (v / C.VMAX * 100) + '%';
-      spdEl.style.background = v >= C.VMAX - 0.01 ? '#ff5c6c' : v > (C.V0 + C.VMAX) / 2 ? '#ffcc33' : '#35d07f';
+      spdEl.style.background = v >= C.VMAX * 0.8 ? '#ff5c6c' : v > C.VMAX * 0.45 ? '#ffcc33' : '#35d07f';
+      kmhEl.textContent = (v * 3.6).toFixed(1);
       draw(e);
     };
     look();
