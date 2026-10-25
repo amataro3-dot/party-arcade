@@ -55,6 +55,7 @@ function setSetting(k, v) {
 
 function startGame() {
   const st = settings();
+  if (st.mode !== 'solo' && Object.keys(room.players).length < 2) { toast('アーケードは2人からです'); return; }
   let cfg;
   if (st.mode === 'solo') {
     // 回した直後にスタートを押しても、画面で選んでいるゲームが始まるようにする
@@ -88,7 +89,9 @@ function renderLobby() {
       ${ps.map(([id, p]) => `<div class="pl"><span class="plname">${id === room.admin ? '👑 ' : ''}${h(p.name)}${id === pid ? '<span class="you">あなた</span>' : ''}</span>${isAdmin && id !== pid ? `<button class="mini" data-act="admin" data-id="${h(id)}">管理者にする</button><button class="mini ng" data-act="kick" data-id="${h(id)}">外す</button>` : ''}</div>`).join('')}
     </div>
     ${settingsCard()}
-    ${isAdmin ? '<button class="btn" id="start">ゲームスタート</button>' : '<div class="center sub">管理者のスタートを待っています…</div>'}
+    ${!isAdmin ? '<div class="center sub">管理者のスタートを待っています…</div>'
+      : (settings().mode !== 'solo' && ps.length < 2) ? '<button class="btn" id="start" disabled style="opacity:0.45">ゲームスタート</button><div class="center sub">アーケードは2人から遊べます(1人ならソロゲームへ)</div>'
+      : '<button class="btn" id="start">ゲームスタート</button>'}
     <button class="btn ghost" id="leave">${leaveLabel()}</button>`);
   $('#ridv').onclick = () => { if (navigator.clipboard) navigator.clipboard.writeText(roomId).then(() => toast('コピーしました')); };
   $('#leave').onclick = leaveRoom;

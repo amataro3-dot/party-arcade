@@ -82,17 +82,22 @@ let records = {};
 const recValue = (g, v, x) => (g.rec ? g.rec(v, x) : v);
 const recText = (g, r) => { try { return g.recFmt ? g.recFmt(r.v, r.x || undefined) : g.fmt(r.v, r.x || undefined); } catch (e) { return ''; } };
 /* カウントダウン画面に出す1行 */
+/* タイトルホルダーを取れるのは、アーケードモードで、ルームに2人以上いるときだけ(1人でのタイトル狙いを防ぐ) */
+function titleOk() {
+  return !!(room && room.config && room.config.mode === 'arcade' && room.players && Object.keys(room.players).length >= 2);
+}
 function titleHtml(game) {
   if (!db) return '';
+  const note = titleOk() ? '' : '<div style="font-size:12px;color:#9aa3c7;margin-top:2px">ここではタイトルは取れません(アーケード・2人以上のときだけ)</div>';
   const r = records[game.id];
   const body = r && typeof r.v === 'number'
     ? `<b style="color:#f2f4ff">${h(r.name || '???')}</b>(${h(recText(game, r))})`
     : 'まだいない! 最初の記録を出そう';
-  return `<div style="margin:0 0 12px;padding:8px 12px;border-radius:10px;background:rgba(255,204,51,0.12);color:#ffcc33;font-size:15px">👑 タイトルホルダー: ${body}</div>`;
+  return `<div style="margin:0 0 12px;padding:8px 12px;border-radius:10px;background:rgba(255,204,51,0.12);color:#ffcc33;font-size:15px">👑 タイトルホルダー: ${body}${note}</div>`;
 }
 /* 記録を出したら呼ぶ。いまの記録より良ければ書きかえる(2人同時でも、良いほうが残る) */
 function tryRecord(game, v, x, roundKey, onNew) {
-  if (!db || game.isMiss(v)) return;
+  if (!db || game.isMiss(v) || !titleOk()) return;
   const r = recValue(game, v, x);
   if (typeof r !== 'number' || !isFinite(r)) return;
   // s は「大きいほど良い」にそろえた値(ルールで「良くなるときだけ書ける」をチェックするのに使う)

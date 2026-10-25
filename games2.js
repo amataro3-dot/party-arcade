@@ -1765,9 +1765,9 @@ const kanaCfg = {
   // 点数の配分(合計100)
   P_SHAPE: 40, P_SIZE: 15, P_POS: 15, P_COUNT: 10, P_ORDER: 10, P_SMOOTH: 10,
   // 形: 線どうしのずれ(マスの幅=1)が SHAPE_OK 以下なら満点、SHAPE_OK+SHAPE_RANGE で0点
-  SHAPE_OK: 0.008, SHAPE_RANGE: 0.067,
-  SIZE_FREE: 0.08, SIZE_RANGE: 0.55,  // 大きさ: |log(自分/お手本)| がこれ以下で満点 / この分で0点
-  POS_OK: 0.025, POS_RANGE: 0.17,     // 位置: 中心のずれ
+  SHAPE_OK: 0.005, SHAPE_RANGE: 0.05,     // v=20できびしく
+  SIZE_FREE: 0.05, SIZE_RANGE: 0.4,   // 大きさ: |log(自分/お手本)| がこれ以下で満点 / この分で0点
+  POS_OK: 0.015, POS_RANGE: 0.12,     // 位置: 中心のずれ
   SMOOTH_OK: 0.0004, SMOOTH_RANGE: 0.0014, // なめらかさ: ふるえの大きさ(真ん中の値)
   INK: 0.075,       // お手本の線の太さ(マスの幅に対して)
   PEN: 0.05         // 書くときの線の太さ
