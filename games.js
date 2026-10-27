@@ -105,7 +105,7 @@ function playJust5(stage, round, submit) {
 function rulerCfg() {
   return {
     LEN: 40,        // 定規の長さ(cm)。つかめなかった・フライングはこの値
-    G: 980,         // 重力(cm/秒²)。本物と同じ。0.2秒で約20cm落ちる
+    G: 600,         // 重力(cm/秒²)。本物(980)より弱め。0.2秒で約12cm、0.3秒で約27cm、0.37秒で40cm落ちきる
     TRIES: 3,       // 何回勝負か
     PAUSE: 1.1      // 1回終わってから次の回までの秒数
   };
