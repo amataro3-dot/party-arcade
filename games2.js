@@ -552,7 +552,8 @@ function playJack(stage, round, submit) {
       `<div class="center" style="font-size:22px;margin:6px 0"><b style="color:#ffcc33">${target}ml</b> 注げ!</div>` +
       `<div class="center sub" id="info">ボトルを押して注ぐ(ふちまで315ml) ・ 残り <b id="left">15.0</b> 秒</div>` +
       `<canvas id="pad" style="display:block;width:100%;height:52vh;margin-top:6px;touch-action:none"></canvas>` +
-      `<button class="btn" id="ok" style="margin-top:8px">決定</button>`;
+      // 決定ボタンは小さく、左に寄せる(ボトルは右下なので、注ぐときに指が当たらないように)。v=23
+      `<button class="btn" id="ok" style="display:block;width:45%;margin:18px auto 0 0;padding:12px;font-size:16px">決定</button>`;
     const cv = stage.querySelector('#pad');
     const info = stage.querySelector('#info');
     const ok = stage.querySelector('#ok');
@@ -608,7 +609,16 @@ function playJack(stage, round, submit) {
       finish(err, { t: target, ml: Math.round(ml * 10) / 10, o: 0 });
     };
 
-    ok.addEventListener('pointerdown', ev => { ev.preventDefault(); decide(); });
+    // 決定は「指を離したとき」。ボタンにふれても、ボタンの外へずらして離せば決定しない(v=23)
+    let okId = null;
+    ok.addEventListener('pointerdown', ev => { ev.preventDefault(); if (!done && okId === null) okId = ev.pointerId; });
+    ok.addEventListener('pointerup', ev => {
+      if (ev.pointerId !== okId) return;
+      okId = null;
+      const r = ok.getBoundingClientRect();
+      if (ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom) decide();
+    });
+    ok.addEventListener('pointercancel', ev => { if (ev.pointerId === okId) okId = null; });
     cv.addEventListener('pointerdown', ev => {
       ev.preventDefault();
       if (done || pid !== null) return;
