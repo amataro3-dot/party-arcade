@@ -5,11 +5,17 @@
    - ゲームの名前と説明は I18N_GAMES(ゲームの id ごと)。
    - Firebase には言語に関係ないデータ(数値・id)だけを保存する。文字は各自の画面で作るので、
      同じルームに日本語の人と英語の人がいてもよい。
-   - 選んだ言語は localStorage の 'muddys-lang'(ja / en / ko)。Muddy's Games の全ゲームで共通。 */
+   - 選んだ言語は localStorage の 'muddys-lang'(ja / en / ko)。Muddy's Games の全ゲームで共通。
+   - URL に ?lang=en などがあれば、それを優先して覚える(サイトの各言語のページの「遊ぶ」から来たとき)。 */
 
 const LANGS = ['ja', 'en', 'ko'];
 const LANG_NAMES = { ja: '日本語', en: 'English', ko: '한국어' };
 let LANG = (() => {
+  // サイトの英語・韓国語ページから来たときは ?lang=en / ?lang=ko がついている。それを覚えて使う
+  try {
+    const q = new URLSearchParams(location.search).get('lang');
+    if (LANGS.includes(q)) { localStorage.setItem('muddys-lang', q); return q; }
+  } catch (e) { }
   try { const s = localStorage.getItem('muddys-lang'); if (LANGS.includes(s)) return s; } catch (e) { }
   const n = String(navigator.language || '').toLowerCase();   // 初めての人は、スマホの言語設定で決める
   return n.startsWith('ko') ? 'ko' : n.startsWith('ja') ? 'ja' : 'en';
@@ -31,8 +37,8 @@ function T(ja, vars) {
   return s;
 }
 
-/* サイトのページへのリンク。サイトの英語・韓国語ページ(/en/ /ko/)ができたら true にする */
-const SITE_LANG_READY = false;
+/* サイトのページへのリンク。サイトの英語・韓国語ページ(/en/ /ko/)があるので true(2026-10-30) */
+const SITE_LANG_READY = true;
 const sitePath = p => (SITE_LANG_READY && LANG !== 'ja' ? '/' + LANG + p : p);
 
 /* 最初の画面の「日本語 / English / 한국어」 */
