@@ -9,9 +9,9 @@ GAMES.push(
     lowerBetter: false, miss: 0,
     isMiss: v => v < 1,
     fmt: (v, x) => {
-      if (v < 1) return '0点';
+      if (v < 1) return T('{n}点', { n: 0 });
       const n = x && typeof x.n === 'number' ? x.n : null;
-      return Math.floor(v) + '点' + (n !== null ? '(' + n + '個' + (x.c ? '・完成!' : '') + ')' : '');
+      return T('{n}点', { n: Math.floor(v) }) + (n !== null ? T(x.c ? '({n}個・完成!)' : '({n}個)', { n }) : '');
     },
     play: playBurger,
     // リザルト用:その人のバーガーを、ずれた形のまま描く
@@ -24,9 +24,9 @@ GAMES.push(
     lowerBetter: true, miss: 999,
     isMiss: v => v >= 999,
     fmt: (v, x) => {
-      if (v >= 999) return x && x.o ? 'あふれた!' : '注いでない';
-      if (!x || typeof x.ml !== 'number') return '誤差 ' + Math.round(v) + 'ml';
-      return '誤差 ' + Math.round(v) + 'ml(' + Math.round(x.ml) + 'ml / お題' + x.t + 'ml)';
+      if (v >= 999) return x && x.o ? T('あふれた!') : T('注いでない');
+      if (!x || typeof x.ml !== 'number') return T('誤差 {n}ml', { n: Math.round(v) });
+      return T('誤差 {n}ml', { n: Math.round(v) }) + T('({a}ml / お題{b}ml)', { a: Math.round(x.ml), b: x.t });
     },
     play: playJack,
     // リザルト用:グラスに、お題の線と注いだ量を描く
@@ -38,7 +38,7 @@ GAMES.push(
     desc: 'ハンバーグ3個が焼けていく。出てくる時間も焼ける速さもバラバラ!<br>ハンバーグの色 = いま焼けている下の面の色。<br>1回タップでひっくり返す(生の面が下になる)、2回目のタップでお皿へ。<br>途中で焼ける速さが変わる! ジュージューの粒が増えたら速くなったしるし。<br>両面ともお題の焼き色に近いほど上位。焦げたらダメ!',
     lowerBetter: true, miss: 999,
     isMiss: v => v >= 999,
-    fmt: (v, x) => v >= 999 ? '全部焦げた…' : '平均誤差 ' + v.toFixed(1) + (x && x.t != null ? '(' + hamName(x.t) + ')' : ''),
+    fmt: (v, x) => v >= 999 ? T('全部焦げた…') : T('平均誤差 {n}', { n: v.toFixed(1) }) + (x && x.t != null ? '(' + hamName(x.t) + ')' : ''),
     play: playHamburg,
     // リザルト用:3個の両面の色と、お題の色見本を並べる
     result: drawHamburgResult
@@ -142,7 +142,7 @@ function playBurger(stage, round, submit) {
 
   countdown(stage, game, round, () => {
     stage.innerHTML =
-      `<div class="center sub" style="font-size:15px;margin:2px 0"><span id="dots" style="letter-spacing:2px;font-size:16px"></span> ・ つぎ <b id="nx" style="color:#ffcc33"></b></div>` +
+      `<div class="center sub" style="font-size:15px;margin:2px 0"><span id="dots" style="letter-spacing:2px;font-size:16px"></span> ・ ${T('つぎ')} <b id="nx" style="color:#ffcc33"></b></div>` +
       `<canvas id="pad" style="display:block;width:100%;height:68vh;margin-top:4px;touch-action:none"></canvas>`;
     const cv = stage.querySelector('#pad');
     const dotsEl = stage.querySelector('#dots'), nxEl = stage.querySelector('#nx');
@@ -168,7 +168,7 @@ function playBurger(stage, round, submit) {
     const offs = [];                          // 乗った具材のずれ(同点対策用)
     let bonus = 0, cur = null, next = 0, wait = 0.3, sim = 0, done = false, iv = null;
     let kc = null, kPts = 0;                  // ケチャップの最中の様子 / ケチャップの点数
-    const kName = it => it.k === 'K' ? 'ケチャップ' : K[it.k].name;
+    const kName = it => it.k === 'K' ? T('ケチャップ') : T(K[it.k].name);
 
     const stackH = n => { let t = 0; for (let i = 0; i < n; i++) t += K[stack[i].k].h; return t; };
     const hfOf = i => (stackH(i) + K[stack[i].k].h / 2) / 0.45;     // 高いほど揺れが大きい
@@ -218,7 +218,7 @@ function playBurger(stage, round, submit) {
       if (age > kp.dur && !kc.drops.length) {                                   // ケチャップ終わり
         kPts = Math.round(100 * kc.hit / Math.max(1, kc.n));
         marks[kc.idx] = 'K';
-        pop('ケチャップ ' + kPts + '%', n ? layerX(n - 1) : px, top - 0.06, '#ff7a66', true);
+        pop(T('ケチャップ') + ' ' + kPts + '%', n ? layerX(n - 1) : px, top - 0.06, '#ff7a66', true);
         kc = null; next++; wait = C.GAP;
         updateHead();
       }
@@ -230,7 +230,7 @@ function playBurger(stage, round, submit) {
       for (let j = k; j < stack.length; j++) {
         debris.push({ k: stack[j].k, x: layerX(j), y: BASE - stackH(j), vx: dir * (0.25 + 0.08 * (j - k)), vy: -0.25, r: 0, vr: dir * (2 + j - k) });
       }
-      pop('崩れた!', layerX(k), BASE - stackH(k) - 0.05, '#ff5c6c', true);
+      pop(T('崩れた!'), layerX(k), BASE - stackH(k) - 0.05, '#ff5c6c', true);
       stack.length = k;
       wob *= 0.3; wobV *= 0.3;
     };
@@ -258,14 +258,14 @@ function playBurger(stage, round, submit) {
         const dir = d >= 0 ? 1 : -1;
         debris.push({ k, x, y: top, vx: dir * 0.45, vy: cur.vy * 0.4, r: 0, vr: dir * 5 });
         marks[cur.idx] = 'X';
-        pop('ポロッ', x, top - 0.04, '#ff5c6c');
+        pop(T('ポロッ'), x, top - 0.04, '#ff5c6c');
       } else {
         stack.push({ k, dx: 0 });
         stack[n].dx = x - px - wob * hfOf(n);       // 見た目の位置のまま乗せる
         offs.push(ad / kk);
         if (ad <= C.PERFECT * kk) { bonus += 30; marks[cur.idx] = 'P'; pop('Perfect!', x, top - 0.05, '#ffcc33', true); }
         else if (ad <= C.GOOD * kk) { bonus += 15; marks[cur.idx] = 'G'; pop('Good', x, top - 0.05, '#35d07f'); }
-        else { marks[cur.idx] = 'E'; pop('ギリギリ', x, top - 0.05, '#f2f4ff'); }
+        else { marks[cur.idx] = 'E'; pop(T('ギリギリ'), x, top - 0.05, '#f2f4ff'); }
         wobV += d * 3;                              // 着地の勢いで少し揺れる
         checkTopple();
       }
@@ -285,7 +285,7 @@ function playBurger(stage, round, submit) {
       const data = { n, c: complete ? 1 : 0, kp: kPts, k: stack.map(l => l.k).join(''), d: stack.map((l, i) => Math.round((l.dx + wob * hfOf(i)) * 1000) / 1000) };
       const kl = stack.findIndex(l => l.ket && l.ket.length);                    // ケチャップが乗っている段(結果の絵用、間引く)
       if (kl >= 0) { data.kl = kl; data.kx = stack[kl].ket.filter((_, i) => i % 2 === 0).map(v => Math.round(v * 1000) / 1000); }
-      if (complete) pop('完成!', px, BASE - stackH(n) - 0.12, '#ffcc33', true);
+      if (complete) pop(T('完成!'), px, BASE - stackH(n) - 0.12, '#ffcc33', true);
       timers.push(setTimeout(() => submit(v, data), 1000));
     };
 
@@ -332,7 +332,7 @@ function playBurger(stage, round, submit) {
       ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
       ctx.fillStyle = 'rgba(242,244,255,0.55)';
       ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('▼ ドラッグでお皿を動かす ▼', W / 2, gy + (H - gy) * 0.7);
+      ctx.fillText('▼ ' + T('ドラッグでお皿を動かす') + ' ▼', W / 2, gy + (H - gy) * 0.7);
       if (touching) {
         ctx.fillStyle = 'rgba(255,204,51,0.55)';
         ctx.beginPath(); ctx.arc(X(tx), gy + (H - gy) * 0.3, 15, 0, Math.PI * 2); ctx.fill();
@@ -521,12 +521,12 @@ function drawBurgerResult(el, data, size) {
   if (data && data.c) {
     ctx.fillStyle = '#ffcc33';
     ctx.font = `bold ${Math.round(size * 0.13)}px sans-serif`;
-    ctx.fillText('完成!', cx, size * 0.02);
+    ctx.fillText(T('完成!'), cx, size * 0.02);
   }
   if (data && typeof data.kp === 'number') {           // ケチャップは上のバンズに隠れるので、文字でも出す
     ctx.fillStyle = '#ff7a66';
     ctx.font = `bold ${Math.round(size * 0.09)}px sans-serif`;
-    ctx.fillText('ケチャップ ' + data.kp + '%', cx, size * (data.c ? 0.16 : 0.04));
+    ctx.fillText(T('ケチャップ') + ' ' + data.kp + '%', cx, size * (data.c ? 0.16 : 0.04));
   }
   el.appendChild(cv);
 }
@@ -545,15 +545,15 @@ function playJack(stage, round, submit) {
   const target = 45 + Math.floor(rnd() * 18) * 15;
 
   game.desc = game.descBase +
-    `<div style="margin-top:14px;font-size:22px">お題 <b style="color:#ffcc33">${target}ml</b></div>`;
+    `<div style="margin-top:14px;font-size:22px">${T('お題')} <b style="color:#ffcc33">${target}ml</b></div>`;
 
   countdown(stage, game, round, () => {
     stage.innerHTML =
-      `<div class="center" style="font-size:22px;margin:6px 0"><b style="color:#ffcc33">${target}ml</b> 注げ!</div>` +
-      `<div class="center sub" id="info">ボトルを押して注ぐ(ふちまで315ml) ・ 残り <b id="left">15.0</b> 秒</div>` +
+      `<div class="center" style="font-size:22px;margin:6px 0">${T('{t} 注げ!', { t: `<b style="color:#ffcc33">${target}ml</b>` })}</div>` +
+      `<div class="center sub" id="info">${T('ボトルを押して注ぐ(ふちまで315ml) ・ 残り {t} 秒', { t: '<b id="left">15.0</b>' })}</div>` +
       `<canvas id="pad" style="display:block;width:100%;height:52vh;margin-top:6px;touch-action:none"></canvas>` +
       // 決定ボタンは小さく、左に寄せる(ボトルは右下なので、注ぐときに指が当たらないように)。v=23
-      `<button class="btn" id="ok" style="display:block;width:45%;margin:18px auto 0 0;padding:12px;font-size:16px">決定</button>`;
+      `<button class="btn" id="ok" style="display:block;width:45%;margin:18px auto 0 0;padding:12px;font-size:16px">${T('決定')}</button>`;
     const cv = stage.querySelector('#pad');
     const info = stage.querySelector('#info');
     const ok = stage.querySelector('#ok');
@@ -602,7 +602,7 @@ function playJack(stage, round, submit) {
     };
     const decide = () => {
       if (done) return;
-      if (ml <= 0) { info.textContent = '注いでない…'; finish(999, { t: target, ml: 0, o: 0 }); return; }
+      if (ml <= 0) { info.textContent = T('注いでない…'); finish(999, { t: target, ml: 0, o: 0 }); return; }
       const err = Math.round(Math.abs(ml - target) * 10) / 10;
       reveal = true;
       draw(performance.now());
@@ -638,7 +638,7 @@ function playJack(stage, round, submit) {
           ml += JACK_RATE * dt;
           if (ml >= JACK_MAX) {                     // あふれた → その場で失敗
             ml = JACK_MAX; over = true; overT = now;
-            info.innerHTML = '<b style="color:#ff5c6c;font-size:20px">あふれた! 失敗!</b>';
+            info.innerHTML = '<b style="color:#ff5c6c;font-size:20px">' + T('あふれた! 失敗!') + '</b>';
             finish(999, { t: target, ml: JACK_MAX, o: 1 }, 1300);
           }
         }
@@ -756,7 +756,7 @@ function drawJackResult(el, data, size) {
    ============================================================ */
 
 const HAM_LEVELS = [[30, 'レア'], [45, 'ミディアムレア'], [60, 'ミディアム'], [80, 'ウェルダン']];
-const hamName = t => (HAM_LEVELS.find(l => l[0] === Number(t)) || [0, ''])[1];
+const hamName = t => T((HAM_LEVELS.find(l => l[0] === Number(t)) || [0, ''])[1]);
 
 // 焼け具合(0〜100)の色。なめらかに変わる
 function hamColor(d) {
@@ -772,7 +772,7 @@ function hamColor(d) {
 function hamSwatches(t, big) {
   return `<div style="display:flex;gap:6px;justify-content:center;margin-top:${big ? 12 : 4}px">` + HAM_LEVELS.map(([v, name]) =>
     `<div style="flex:1;max-width:90px;text-align:center;font-size:${big ? 12 : 10}px;line-height:1.3;color:${v === t ? '#ffcc33' : '#9aa3c7'};font-weight:${v === t ? 'bold' : 'normal'}">` +
-    `<div style="height:${big ? 26 : 16}px;border-radius:6px;background:${hamColor(v)};border:${v === t ? '3px solid #ffcc33' : '1px solid rgba(255,255,255,0.2)'}"></div>${name}</div>`).join('') + `</div>`;
+    `<div style="height:${big ? 26 : 16}px;border-radius:6px;background:${hamColor(v)};border:${v === t ? '3px solid #ffcc33' : '1px solid rgba(255,255,255,0.2)'}"></div>${T(name)}</div>`).join('') + `</div>`;
 }
 
 // お題と、3個それぞれの出方・焼け方。種が同じなら全員同じ
@@ -842,11 +842,11 @@ function playHamburg(stage, round, submit) {
   const { target, pats } = hamMake(Math.round((round.delay || 3000) * 1000));
 
   game.desc = game.descBase +
-    `<div style="margin-top:12px;font-size:22px">お題 <b style="color:#ffcc33">${hamName(target)}</b></div>` + hamSwatches(target, true);
+    `<div style="margin-top:12px;font-size:22px">${T('お題')} <b style="color:#ffcc33">${hamName(target)}</b></div>` + hamSwatches(target, true);
 
   countdown(stage, game, round, () => {
     stage.innerHTML =
-      `<div class="center sub" style="font-size:16px;margin:2px 0">お題 <b style="color:#ffcc33;font-size:20px">${hamName(target)}</b> ・ 残り <b id="left">15.0</b> 秒</div>` +
+      `<div class="center sub" style="font-size:16px;margin:2px 0">${T('お題')} <b style="color:#ffcc33;font-size:20px">${hamName(target)}</b> ・ ${T('残り {t} 秒', { t: '<b id="left">15.0</b>' })}</div>` +
       hamSwatches(target, false) +
       `<canvas id="pad" style="display:block;width:100%;height:60vh;margin-top:6px;touch-action:none"></canvas>`;
     const cv = stage.querySelector('#pad');
@@ -972,7 +972,7 @@ function playHamburg(stage, round, submit) {
           }
           if (age < 1) {
             ctx.fillStyle = '#ff5c6c'; ctx.font = 'bold 20px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-            ctx.fillText('焦げた!', x, y - pr * 1.2 - age * 20);
+            ctx.fillText(T('焦げた!'), x, y - pr * 1.2 - age * 20);
           }
         }
       });
@@ -1058,7 +1058,7 @@ function drawHamburgResult(el, data, size) {
   ctx.fillStyle = '#ffcc33';
   ctx.font = `bold ${Math.round(size * 0.11)}px sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  ctx.fillText('お題 ' + hamName(t), size / 2, size * 0.8);
+  ctx.fillText(T('お題') + ' ' + hamName(t), size / 2, size * 0.8);
   el.appendChild(cv);
 }
 
@@ -1071,9 +1071,9 @@ GAMES.push(
     lowerBetter: true, miss: 99,
     isMiss: v => v >= 99,
     fmt: (v, x) => {
-      if (v >= 99) return '進んでない';
-      if (v < 0) return 'ゴール! ' + (v + 100).toFixed(2) + '秒';
-      return 'あと ' + v.toFixed(1) + 'm' + (x ? (x.c ? '(バレた!)' : '(時間切れ)') : '');
+      if (v >= 99) return T('進んでない');
+      if (v < 0) return T('ゴール!') + ' ' + T('{n}秒', { n: (v + 100).toFixed(2) });
+      return T('あと {n}m', { n: v.toFixed(1) }) + (x ? T(x.c ? '(バレた!)' : '(時間切れ)') : '');
     },
     play: playDaruma,
     // リザルト用:スタートから鬼までの線と、自分のいた位置
@@ -1084,10 +1084,10 @@ GAMES.push(
     desc: '鍋に入るスパイスを、順番どおりに覚えよう!<br>そのあと棚から、入った順にタップして同じカレーを作る。<br>スパイスも順番も合っていれば2点、入っているけど順番ちがいは1点。<br>同じスパイスが2回入ることもあるよ!',
     lowerBetter: false, miss: 0,
     isMiss: v => v < 1,
-    fmt: (v, x) => v < 1 ? '0点' : Math.floor(v) + '点' + (x && typeof x.h === 'number' ? '(◎' + x.h + ' ○' + x.b + ')' : ''),
+    fmt: (v, x) => v < 1 ? T('{n}点', { n: 0 }) : T('{n}点', { n: Math.floor(v) }) + (x && typeof x.h === 'number' ? '(◎' + x.h + ' ○' + x.b + ')' : ''),
     // タイトルホルダーは、満点(個数×2)に対する%で比べる。同じ%なら早く完成した人(小数の部分)
     rec: (v, x) => { const n = curryLen(x); return n ? Math.round(Math.floor(v) / (n * 2) * 1000) / 10 + (v - Math.floor(v)) / 100 : v; },
-    recFmt: (v, x) => { const n = curryLen(x); return n ? Math.round(Math.floor(v) / (n * 2) * 100) + '%(' + Math.floor(v) + '/' + n * 2 + '点)' : Math.floor(v) + '点'; },
+    recFmt: (v, x) => { const n = curryLen(x); return n ? Math.round(Math.floor(v) / (n * 2) * 100) + '%(' + T('{n}点', { n: Math.floor(v) + '/' + n * 2 }) + ')' : T('{n}点', { n: Math.floor(v) }); },
     play: playCurry,
     // リザルト用:正しいレシピと自分の答えを並べて、◎○×をつける
     result: drawCurryResult
@@ -1128,6 +1128,13 @@ function darumaCfg() {
 }
 
 const DARUMA_TEXT = 'だるまさんがころんだ';
+/* 鬼のことば(言語ごと)。10こに分けて、日本語の1文字と同じ時刻に1こずつ出す(全員同じタイミング) */
+const DARUMA_SAY = {
+  ja: Array.from(DARUMA_TEXT),
+  en: ['Red ', 'li', 'ght, ', 'gr', 'een ', 'li', 'g', 'h', 't', '!'],
+  ko: ['무', '궁', '화 ', '꽃', '이 ', '피', '었', '습', '니', '다']
+};
+const darumaSaid = n => (DARUMA_SAY[LANG] || DARUMA_SAY.ja).slice(0, n).join('');
 
 // 鬼の予定を最初に全部決めておく。種が同じなら全員同じ
 // calls: [{ s: 言い始め, e: 振り向く時刻, w: 見張りが終わる時刻, ch: [各文字が出る時刻] }]
@@ -1174,15 +1181,15 @@ function darumaMake(seed) {
 function darumaState(calls, e) {
   for (let i = 0; i < calls.length; i++) {
     const c = calls[i];
-    if (e < c.s) return { watching: false, since: 0, text: '' };
+    if (e < c.s) return { watching: false, since: 0, n: 0 };
     if (e < c.e) {
       let n = 0;
       while (n < c.ch.length && c.ch[n] <= e) n++;
-      return { watching: false, since: 0, text: DARUMA_TEXT.slice(0, n) };
+      return { watching: false, since: 0, n };
     }
-    if (e < c.w) return { watching: true, since: e - c.e, text: DARUMA_TEXT };
+    if (e < c.w) return { watching: true, since: e - c.e, n: DARUMA_TEXT.length };
   }
-  return { watching: false, since: 0, text: '' };
+  return { watching: false, since: 0, n: 0 };
 }
 
 function playDaruma(stage, round, submit) {
@@ -1194,12 +1201,12 @@ function playDaruma(stage, round, submit) {
   countdown(stage, game, round, () => {
     const bstyle = 'flex:1;height:min(24vh,150px);min-height:96px;border-radius:22px;display:flex;align-items:center;justify-content:center;text-align:center;font-size:22px;font-weight:800;line-height:1.3;color:#fff;border:4px solid rgba(255,255,255,0.3);user-select:none;-webkit-user-select:none;touch-action:none';
     stage.innerHTML =
-      `<div class="center sub" id="top" style="font-size:18px;margin:2px 0">あと <b id="rem" style="color:#ffcc33;font-size:26px">${C.DIST.toFixed(1)}</b> m ・ 残り <b id="left">${C.DUR.toFixed(1)}</b> 秒<b id="last" style="color:#ff5c6c;margin-left:6px"></b></div>` +
+      `<div class="center sub" id="top" style="font-size:18px;margin:2px 0">${T('あと {n} m ・ 残り {t} 秒', { n: `<b id="rem" style="color:#ffcc33;font-size:26px">${C.DIST.toFixed(1)}</b>`, t: `<b id="left">${C.DUR.toFixed(1)}</b>` })}<b id="last" style="color:#ff5c6c;margin-left:6px"></b></div>` +
       `<canvas id="pad" style="display:block;width:100%;height:45vh;margin-top:4px;touch-action:none"></canvas>` +
       `<div style="display:flex;align-items:center;gap:10px;margin:6px 6% 0"><div style="flex:1;height:10px;border-radius:5px;background:rgba(255,255,255,0.12);overflow:hidden"><div id="spd" style="height:100%;width:0;background:#35d07f"></div></div><div style="width:84px;text-align:right;font-size:15px"><b id="kmh" style="font-size:20px">0</b> km/h</div></div>` +
       `<div style="display:flex;gap:14px;margin-top:10px;-webkit-tap-highlight-color:transparent">` +
-      `<div id="brk" style="${bstyle};background:#c8323f">ブレーキ</div>` +
-      `<div id="acc" style="${bstyle};background:#4c8dff"><div>ダッシュ<div style="font-size:13px;font-weight:600">長押しで加速</div></div></div></div>`;
+      `<div id="brk" style="${bstyle};background:#c8323f">${T('ブレーキ')}</div>` +
+      `<div id="acc" style="${bstyle};background:#4c8dff"><div>${T('ダッシュ')}<div style="font-size:13px;font-weight:600">${T('長押しで加速')}</div></div></div></div>`;
     const cv = stage.querySelector('#pad');
     const top = stage.querySelector('#top');
     const remEl = stage.querySelector('#rem');
@@ -1237,9 +1244,9 @@ function playDaruma(stage, round, submit) {
       caught = how === 'caught'; goal = how === 'goal';
       const rem = Math.max(0, Math.round((C.DIST - pos) * 10) / 10);
       const data = { r: rem, g: goal ? 1 : 0, c: caught ? 1 : 0, t: Math.round(t * 100) / 100 };
-      if (goal) top.innerHTML = '<b style="color:#ffcc33;font-size:24px">タッチ! ' + t.toFixed(2) + '秒</b>';
-      else if (caught) top.innerHTML = '<b style="color:#ff5c6c;font-size:24px">バレた!</b> あと <b style="color:#ffcc33">' + rem.toFixed(1) + '</b> m';
-      else top.innerHTML = '時間切れ! あと <b style="color:#ffcc33;font-size:24px">' + rem.toFixed(1) + '</b> m';
+      if (goal) top.innerHTML = '<b style="color:#ffcc33;font-size:24px">' + T('タッチ!') + ' ' + T('{n}秒', { n: t.toFixed(2) }) + '</b>';
+      else if (caught) top.innerHTML = '<b style="color:#ff5c6c;font-size:24px">' + T('バレた!') + '</b> ' + T('あと {n} m', { n: '<b style="color:#ffcc33">' + rem.toFixed(1) + '</b>' });
+      else top.innerHTML = T('時間切れ!') + ' ' + T('あと {n} m', { n: '<b style="color:#ffcc33;font-size:24px">' + rem.toFixed(1) + '</b>' });
       look();
       draw(t);
       const v2 = goal ? Math.round((t - 100) * 100) / 100 : pos <= 0 ? 99 : rem;
@@ -1305,7 +1312,7 @@ function playDaruma(stage, round, submit) {
       ctx.fillStyle = '#2f7a48'; ctx.beginPath(); ctx.arc(W / 2 + H * 0.087, oy - H * 0.2, H * 0.065, 0, Math.PI * 2); ctx.fill();
       drawDarumaOni(ctx, W / 2, oy, H * 0.2, st.watching || done && caught);
       // 鬼のことば
-      const said = done ? (caught ? 'みーつけた!' : goal ? 'タッチされた!' : '') : st.text;
+      const said = done ? (caught ? T('みーつけた!') : goal ? T('タッチされた!') : '') : darumaSaid(st.n);
       if (said) {
         ctx.font = `bold ${Math.round(Math.min(26, W / 13))}px sans-serif`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -1347,7 +1354,7 @@ function playDaruma(stage, round, submit) {
       if (done) return;
       remEl.textContent = Math.max(0, C.DIST - pos).toFixed(1);
       leftEl.textContent = Math.max(0, C.DUR - e).toFixed(1);
-      lastEl.textContent = e >= C.DUR ? 'ラスト!' : '';
+      lastEl.textContent = e >= C.DUR ? T('ラスト!') : '';
       spdEl.style.width = (v / C.VMAX * 100) + '%';
       spdEl.style.background = v >= C.VMAX * 0.8 ? '#ff5c6c' : v > C.VMAX * 0.45 ? '#ffcc33' : '#35d07f';
       kmhEl.textContent = (v * 3.6).toFixed(1);
@@ -1430,7 +1437,7 @@ function drawDarumaResult(el, data, size) {
   ctx.beginPath(); ctx.arc(x0 + (x1 - x0) * f, y, h * 0.11, 0, Math.PI * 2); ctx.fill();
   ctx.font = `bold ${Math.round(h * 0.22)}px sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.fillText(data.g ? 'タッチ!' : data.c ? 'バレた!' : '時間切れ', w / 2, h * 0.2);
+  ctx.fillText(T(data.g ? 'タッチ!' : data.c ? 'バレた!' : '時間切れ'), w / 2, h * 0.2);
 }
 
 /* ============================================================
@@ -1575,7 +1582,7 @@ function playCurry(stage, round, submit) {
 
   countdown(stage, game, round, () => {
     stage.innerHTML =
-      `<div class="center sub" id="info" style="font-size:18px;margin:2px 0">よく見て覚えて! <b id="cnt" style="color:#ffcc33">0/${N}</b></div>` +
+      `<div class="center sub" id="info" style="font-size:18px;margin:2px 0">${T('よく見て覚えて!')} <b id="cnt" style="color:#ffcc33">0/${N}</b></div>` +
       `<canvas id="pot" style="display:block;width:100%;height:20vh;touch-action:none"></canvas>` +
       `<div id="area" style="display:flex;flex-direction:column;gap:8px"></div>`;
     const info = stage.querySelector('#info');
@@ -1597,7 +1604,7 @@ function playCurry(stage, round, submit) {
     const showCard = k => {
       const big = area.querySelector('#big'); if (!big) return;
       big.innerHTML = '';
-      if (k < N) { big.appendChild(icon(rec[k], 130)); area.querySelector('#bigname').textContent = CURRY_SPICES[rec[k]].n; }
+      if (k < N) { big.appendChild(icon(rec[k], 130)); area.querySelector('#bigname').textContent = T(CURRY_SPICES[rec[k]].n); }
       else { area.querySelector('#bigname').textContent = ''; }
     };
 
@@ -1656,11 +1663,11 @@ function playCurry(stage, round, submit) {
     let undo = null, okb = null;
     const startAnswer = () => {
       phase = 'answer'; ansT0 = performance.now();
-      info.innerHTML = `入った順にタップ! ・ 残り <b id="left">${C.ANS.toFixed(1)}</b> 秒`;
+      info.innerHTML = T('入った順にタップ! ・ 残り {t} 秒', { t: `<b id="left">${C.ANS.toFixed(1)}</b>` });
       area.innerHTML =
         `<div id="slots" style="display:flex;gap:6px;justify-content:center"></div>` +
         `<div id="shelf" style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;-webkit-tap-highlight-color:transparent"></div>` +
-        `<div style="display:flex;gap:10px"><button class="btn sub" id="undo" style="padding:12px">↶ 1つ戻る</button><button class="btn" id="okb" style="padding:12px" disabled>完成!</button></div>`;
+        `<div style="display:flex;gap:10px"><button class="btn sub" id="undo" style="padding:12px">↶ ${T('1つ戻る')}</button><button class="btn" id="okb" style="padding:12px" disabled>${T('完成!')}</button></div>`;
       sbox = area.querySelector('#slots');
       undo = area.querySelector('#undo'); okb = area.querySelector('#okb');
       const shelf = area.querySelector('#shelf');
@@ -1669,7 +1676,7 @@ function playCurry(stage, round, submit) {
         b.dataset.i = i;
         b.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 2px;border-radius:10px;background:rgba(255,255,255,0.1);border:2px solid rgba(255,255,255,0.18);font-size:10.5px;font-weight:700;line-height:1.2;color:#f2f4ff;user-select:none;-webkit-user-select:none;touch-action:manipulation;white-space:nowrap;overflow:hidden';
         b.appendChild(icon(i, 34));
-        const t = document.createElement('span'); t.textContent = sp.short; t.style.pointerEvents = 'none';
+        const t = document.createElement('span'); t.textContent = T(sp.short); t.style.pointerEvents = 'none';
         b.appendChild(t);
         shelf.appendChild(b);
       });
@@ -1693,7 +1700,7 @@ function playCurry(stage, round, submit) {
       const rest = Math.max(0, C.ANS - (performance.now() - ansT0) / 1000);
       const sc = curryScore(rec, ans);
       const frac = Math.round(0.9 * rest / C.ANS * 100) / 100;
-      info.innerHTML = `<b style="color:#ffcc33;font-size:22px">${sc.pts}点</b>(◎${sc.h} ○${sc.b})`;
+      info.innerHTML = `<b style="color:#ffcc33;font-size:22px">${T('{n}点', { n: sc.pts })}</b>(◎${sc.h} ○${sc.b})`;
       renderSlots();
       submit(sc.pts > 0 ? sc.pts + frac : 0, { r: rec, a: ans.slice(), h: sc.h, b: sc.b });
     };
@@ -1973,14 +1980,14 @@ GAMES.push({
   desc: 'お手本のひらがな・カタカナを、ノートのマスにキレイに書こう!<br>指で1画ずつ書いてね。「1画もどす」「全部消す」で書き直しOK。書けたら「決定」。<br>形・大きさ・位置・画数・書き順・なめらかさで100点満点。15秒。',
   lowerBetter: false, miss: 0,
   isMiss: v => v <= 0,
-  fmt: v => Math.floor(v) + '点',
+  fmt: v => T('{n}点', { n: Math.floor(v) }),
   play: playKana,
   // リザルト用:自分の字(大きいときは、お手本とならべて項目ごとの点も出す)
   result: drawKanaResult,
   // 結果画面のいちばん上に出す、そのラウンドのお手本
   resultTop: (el, round) => {
     const ci = kanaPick(Math.round(((round && round.delay) || 3000) * 1000));
-    el.innerHTML = '<div class="sub">お手本「' + KANA_DATA[ci][0] + '」</div>';
+    el.innerHTML = '<div class="sub">' + T('お手本「{c}」', { c: KANA_DATA[ci][0] }) + '</div>';
     const size = 110, dpr = window.devicePixelRatio || 1;
     const cv = document.createElement('canvas');
     cv.width = size * dpr; cv.height = size * dpr; cv.style.width = cv.style.height = size + 'px'; cv.style.display = 'block'; cv.style.margin = '6px auto 0';
@@ -2001,10 +2008,10 @@ function playKana(stage, round, submit) {
     stage.innerHTML =
       `<div style="display:flex;align-items:center;gap:12px;margin:0 0 6px">` +
       `<canvas id="ref" style="width:84px;height:84px;flex:none"></canvas>` +
-      `<div style="flex:1"><div class="sub">お手本どおりに書こう</div><div style="font-size:15px">画数 <b id="cnt" style="color:#ffcc33;font-size:20px">0</b> ・ 残り <b id="left">${C.DUR.toFixed(1)}</b> 秒</div></div></div>` +
+      `<div style="flex:1"><div class="sub">${T('お手本どおりに書こう')}</div><div style="font-size:15px">${T('画数')} <b id="cnt" style="color:#ffcc33;font-size:20px">0</b> ・ ${T('残り {t} 秒', { t: `<b id="left">${C.DUR.toFixed(1)}</b>` })}</div></div></div>` +
       `<canvas id="pad" style="display:block;margin:0 auto;touch-action:none;border-radius:6px"></canvas>` +
       `<div style="display:flex;gap:8px;margin-top:10px">` +
-      `<button class="btn ghost" id="undo" style="${bs}">1画もどす</button><button class="btn ghost" id="clr" style="${bs}">全部消す</button><button class="btn" id="ok" style="${bs};font-weight:800">決定</button></div>`;
+      `<button class="btn ghost" id="undo" style="${bs}">${T('1画もどす')}</button><button class="btn ghost" id="clr" style="${bs}">${T('全部消す')}</button><button class="btn" id="ok" style="${bs};font-weight:800">${T('決定')}</button></div>`;
     // お手本
     const rc = stage.querySelector('#ref');
     const dpr = window.devicePixelRatio || 1;
@@ -2103,7 +2110,7 @@ function drawKanaResult(el, data, size) {
   let ux = 0;
   if (big) {
     ctx.fillStyle = '#9aa3c7'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ctx.fillText('お手本', cell / 2, 0); ctx.fillText('あなた', cell * 1.5 + 24, 0);
+    ctx.fillText(T('お手本'), cell / 2, 0); ctx.fillText(T('あなた'), cell * 1.5 + 24, 0);
     kanaDrawRef(ctx, ci, 0, 18, cell);
     ux = cell + 24;
   }
@@ -2117,7 +2124,7 @@ function drawKanaResult(el, data, size) {
     const names = [['形', C.P_SHAPE], ['大きさ', C.P_SIZE], ['位置', C.P_POS], ['画数', C.P_COUNT], ['書き順', C.P_ORDER], ['なめらか', C.P_SMOOTH]];
     const d = document.createElement('div');
     d.style.cssText = 'display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 10px;margin:8px auto 0;max-width:280px;font-size:13px;color:#9aa3c7';
-    d.innerHTML = names.map(([n, mx], i) => `<div>${n} <b style="color:#f2f4ff">${Math.round(sc[i] || 0)}</b>/${mx}</div>`).join('');
+    d.innerHTML = names.map(([n, mx], i) => `<div>${T(n)} <b style="color:#f2f4ff">${Math.round(sc[i] || 0)}</b>/${mx}</div>`).join('');
     el.appendChild(d);
   }
 }

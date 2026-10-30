@@ -15,7 +15,7 @@
 <style>
 :root{--bg:#0f1220;--card:#1b2036;--card2:#262d4a;--text:#f2f4ff;--sub:#9aa3c7;--accent:#ffcc33;--ok:#35d07f;--ng:#ff5c6c;--blue:#4c8dff}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif;touch-action:manipulation;user-select:none;-webkit-user-select:none;overscroll-behavior:none}
+html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;touch-action:manipulation;user-select:none;-webkit-user-select:none;overscroll-behavior:none}
 input{user-select:text;-webkit-user-select:text}
 #app{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;gap:12px;padding:16px;max-width:520px;margin:0 auto}
 h1{font-size:22px;margin:8px 0;text-align:center}
@@ -82,6 +82,7 @@ input[type=checkbox]{width:24px;height:24px;padding:0;flex:none;accent-color:var
 .pick-item{height:46px;line-height:46px;text-align:center;font-size:19px;font-weight:700;color:var(--sub);scroll-snap-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 12px}
 .pick-item.on{color:var(--text);font-size:21px}
 .pick-desc{min-height:3.6em;text-align:center;line-height:1.6}
+.seg.lang button{padding:8px 4px;font-size:14px}
 </style>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
@@ -91,9 +92,10 @@ input[type=checkbox]{width:24px;height:24px;padding:0;flex:none;accent-color:var
 <body>
 <div id="app"></div>
 <div id="toast"></div>
-<script src="games.js?v=23"></script>
-<script src="games2.js?v=23"></script>
-<script src="core.js?v=23"></script>
-<script src="battle.js?v=23"></script>
+<script src="i18n.js?v=24"></script>
+<script src="games.js?v=24"></script>
+<script src="games2.js?v=24"></script>
+<script src="core.js?v=24"></script>
+<script src="battle.js?v=24"></script>
 </body>
 </html>

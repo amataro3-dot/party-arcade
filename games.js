@@ -10,7 +10,7 @@ GAMES.push(
     desc: 'お題の秒数(5〜9秒)ぴったりでSTOP!<br>スタートして2秒たつと、数字が見えなくなる。<br>心の中で数えよう。誤差が小さいほど上位。',
     lowerBetter: true, miss: 99999,
     isMiss: v => v >= 99999,
-    fmt: (v, x) => v >= 99999 ? '時間切れ' : '誤差 ' + (v / 1000).toFixed(3) + '秒' + (x && x.t ? '(お題' + just5Sec(x.t) + ')' : ''),
+    fmt: (v, x) => v >= 99999 ? T('時間切れ') : T('誤差 {n}秒', { n: (v / 1000).toFixed(3) }) + (x && x.t ? T('(お題{t})', { t: just5Sec(x.t) }) : ''),
     play: playJust5
   },
   {
@@ -18,7 +18,7 @@ GAMES.push(
     desc: '定規が予告なしに落ちてくる!<br>落ちたらすぐ、画面のどこでもタップしてつかもう。<br>3回勝負。つかんだ位置(何cm落ちたか)の平均が短いほど上位。<br>ピクッと揺れるだけのフェイントもあるよ。<br>落ちる前に押すとフライング(その回は40cm)。',
     lowerBetter: true, miss: 99,
     isMiss: v => v >= 99,
-    fmt: v => v >= 99 ? '全部失敗' : '平均 ' + v.toFixed(1) + 'cm',
+    fmt: v => v >= 99 ? T('全部失敗') : T('平均 {n}cm', { n: v.toFixed(1) }),
     play: playRuler,
     // リザルト用:定規に3回分のつかんだ位置を描く
     result: drawRulerResult
@@ -30,17 +30,17 @@ GAMES.push(
     lowerBetter: true, miss: 99,
     isMiss: v => v >= 99,
     fmt: (v, x) => {
-      if (v >= 99) return '失格';
-      if (!x || typeof x.cm !== 'number') return '誤差 ' + v.toFixed(2) + 'cm';
+      if (v >= 99) return T('失格');
+      if (!x || typeof x.cm !== 'number') return T('誤差 {n}cm', { n: v.toFixed(2) });
       const d = Math.round((x.cm - x.t) * 100) / 100;
-      return '誤差 ' + (d > 0 ? '+' : '') + d.toFixed(2) + 'cm(' + (d > 0 ? '長い' : d < 0 ? '短い' : 'ぴったり') + ')';
+      return T('誤差 {n}cm', { n: (d > 0 ? '+' : '') + d.toFixed(2) }) + T(d > 0 ? '(長い)' : d < 0 ? '(短い)' : '(ぴったり)');
     },
     // 結果に出す棒。金色の目印がお題の長さ、青い棒が描いた線の長さ
     viz: (v, x) => {
       const cm = Number(x.cm), t = Number(x.t), MAX = 12;
       if (!isFinite(cm) || !isFinite(t)) return '';
       const pct = n => Math.min(100, Math.max(0, n / MAX * 100));
-      return `<div class="vbar"><div class="vfill" style="width:${pct(cm)}%"></div><div class="vmark" style="left:${pct(t)}%"></div></div><div class="vlabel">描いた線 ${cm.toFixed(2)}cm ・ お題 ${t}cm</div>`;
+      return `<div class="vbar"><div class="vfill" style="width:${pct(cm)}%"></div><div class="vmark" style="left:${pct(t)}%"></div></div><div class="vlabel">${T('描いた線 {a}cm ・ お題 {b}cm', { a: cm.toFixed(2), b: t })}</div>`;
     },
     play: playDrawCm
   }
@@ -61,7 +61,7 @@ function seededRng(seed) {
 function countdown(stage, game, round, onGo) {
   const m = multAt(round.index);
   const title = typeof titleHtml === 'function' ? titleHtml(game) : '';   // 👑 タイトルホルダー(core.js)
-  stage.innerHTML = `<div class="rule">${m > 1 ? `<div class="bonus">${bonusLabel(round.index)} このラウンドはポイント2倍</div>` : ''}<h2>${h(game.title)}</h2><p>${game.desc}</p>${title}<div class="cdnum" id="cd"></div></div>`;
+  stage.innerHTML = `<div class="rule">${m > 1 ? `<div class="bonus">${bonusLabel(round.index)} ${T('このラウンドはポイント2倍')}</div>` : ''}<h2>${h(game.title)}</h2><p>${game.desc}</p>${title}<div class="cdnum" id="cd"></div></div>`;
   const cd = stage.querySelector('#cd');
   const iv = setInterval(() => {
     const rem = round.startAt - serverNow();
@@ -72,14 +72,14 @@ function countdown(stage, game, round, onGo) {
 }
 
 /* --- 〇秒ジャスト --- */
-const just5Sec = t => (t % 1 ? Number(t).toFixed(1) : String(t)) + '秒';   // 7 → 「7秒」、7.5 → 「7.5秒」
+const just5Sec = t => T('{n}秒', { n: t % 1 ? Number(t).toFixed(1) : String(t) });   // 7 → 「7秒」、7.5 → 「7.5秒」
 function playJust5(stage, round, submit) {
   const game = GAMES.find(g => g.id === 'just5');
   // 全員共通の round.delay からお題を決める → 5〜9秒、0.5秒刻みの9通り
   const target = 5 + Math.floor(seededRng(Math.round((round.delay || 3000) * 1000))() * 9) * 0.5;
-  game.desc = game.descBase + `<div style="margin-top:14px;font-size:22px">お題 <b style="color:#ffcc33">${just5Sec(target)}</b></div>`;
+  game.desc = game.descBase + `<div style="margin-top:14px;font-size:22px">${T('お題')} <b style="color:#ffcc33">${just5Sec(target)}</b></div>`;
   countdown(stage, game, round, () => {
-    stage.innerHTML = `<div class="big-num" id="t">0.00</div><div class="center" style="font-size:20px"><b style="color:#ffcc33">${just5Sec(target)}</b>ぴったりで止めろ!</div><button class="btn big" id="stop">STOP</button>`;
+    stage.innerHTML = `<div class="big-num" id="t">0.00</div><div class="center" style="font-size:20px">${T('{t}ぴったりで止めろ!', { t: `<b style="color:#ffcc33">${just5Sec(target)}</b>` })}</div><button class="btn big" id="stop">STOP</button>`;
     const el = stage.querySelector('#t');
     const t0 = performance.now();
     let done = false;
@@ -129,7 +129,7 @@ function playRuler(stage, round, submit) {
 
   countdown(stage, game, round, () => {
     stage.innerHTML =
-      `<div class="center sub" id="info" style="font-size:18px;margin:2px 0"><b id="no" style="color:#ffcc33">1</b>/${C.TRIES}回目 ・ 落ちたらタップ!</div>` +
+      `<div class="center sub" id="info" style="font-size:18px;margin:2px 0">${T('{k}/{n}回目 ・ 落ちたらタップ!', { k: '<b id="no" style="color:#ffcc33">1</b>', n: C.TRIES })}</div>` +
       `<div class="center sub" id="rec" style="min-height:22px"></div>` +
       `<canvas id="pad" style="display:block;width:100%;height:62vh;margin-top:4px;touch-action:none"></canvas>`;
     const cv = stage.querySelector('#pad');
@@ -173,7 +173,7 @@ function playRuler(stage, round, submit) {
     };
 
     const showRec = () => {
-      rec.innerHTML = res.map((v, i) => kinds[i] === 'o' ? `${i + 1}回目 <b style="color:#f2f4ff">${v.toFixed(1)}cm</b>` : `${i + 1}回目 <b style="color:#ff5c6c">${kinds[i] === 'f' ? 'フライング' : '落ちた'}</b>`).join(' ・ ');
+      rec.innerHTML = res.map((v, i) => kinds[i] === 'o' ? `${T('{n}回目', { n: i + 1 })} <b style="color:#f2f4ff">${v.toFixed(1)}cm</b>` : `${T('{n}回目', { n: i + 1 })} <b style="color:#ff5c6c">${kinds[i] === 'f' ? T('フライング') : T('落ちた')}</b>`).join(' ・ ');
     };
 
     const finish = () => {
@@ -181,14 +181,14 @@ function playRuler(stage, round, submit) {
       done = true;
       const ok = kinds.filter(s => s === 'o').length;
       const avg = Math.round(res.reduce((a, b) => a + b, 0) / res.length * 10) / 10;
-      stage.querySelector('#info').innerHTML = ok ? `平均 <b style="color:#ffcc33;font-size:24px">${avg.toFixed(1)}cm</b>` : '<b style="color:#ff5c6c">全部失敗…</b>';
+      stage.querySelector('#info').innerHTML = ok ? `${T('平均')} <b style="color:#ffcc33;font-size:24px">${avg.toFixed(1)}cm</b>` : '<b style="color:#ff5c6c">' + T('全部失敗…') + '</b>';
       submit(ok ? avg : 99, { c: res.slice(), s: kinds.join('') });
     };
 
     const endTry = (cm, kind) => {
       res.push(Math.round(cm * 10) / 10); kinds.push(kind);
       st = 'next'; tStart = now();
-      msg = kind === 'o' ? cm.toFixed(1) + 'cm!' : kind === 'f' ? 'フライング!' : '落ちた!';
+      msg = kind === 'o' ? cm.toFixed(1) + 'cm!' : kind === 'f' ? T('フライング!') : T('落ちた!');
       msgColor = kind === 'o' ? '#ffcc33' : '#ff5c6c';
       showRec();
     };
@@ -298,16 +298,16 @@ function playDrawCm(stage, round, submit) {
 
   // カウントダウン中(5秒)にお題と1cmの見本を見せる
   game.desc = game.descBase +
-    `<div style="margin-top:14px;font-size:22px">お題 <b style="color:#ffcc33">${target}cm</b></div>` +
-    `<div style="margin-top:10px">見本:これが1cm</div>` +
+    `<div style="margin-top:14px;font-size:22px">${T('お題')} <b style="color:#ffcc33">${target}cm</b></div>` +
+    `<div style="margin-top:10px">${T('見本:これが1cm')}</div>` +
     `<div style="width:1cm;height:8px;background:#ffcc33;border-radius:4px;margin:8px auto"></div>`;
 
   countdown(stage, game, round, () => {
     stage.innerHTML =
-      `<div class="center" style="font-size:22px;margin:6px 0"><b style="color:#ffcc33">${target}cm</b> を描け!</div>` +
-      `<div class="center sub">残り <b id="left">10.0</b> 秒 ・ 描き直しOK</div>` +
+      `<div class="center" style="font-size:22px;margin:6px 0">${T('{t} を描け!', { t: `<b style="color:#ffcc33">${target}cm</b>` })}</div>` +
+      `<div class="center sub">${T('残り {t} 秒 ・ 描き直しOK', { t: '<b id="left">10.0</b>' })}</div>` +
       `<canvas id="pad" style="display:block;width:100%;height:48vh;margin-top:8px;background:rgba(255,255,255,0.05);border-radius:12px;touch-action:none"></canvas>` +
-      `<button class="btn" id="ok" disabled>決定</button>`;
+      `<button class="btn" id="ok" disabled>${T('決定')}</button>`;
 
     const cv = stage.querySelector('#pad');
     const left = stage.querySelector('#left');
@@ -400,7 +400,7 @@ GAMES.push(
     desc: '真ん中の点から円の外までドラッグして切ろう!<br>離すと線が残る。「1つ戻る」でやり直せる。<br>お題の数だけ切ったら終了。<br>1切れずつの大きさがそろうほど上位。',
     lowerBetter: true, miss: 99,
     isMiss: v => v >= 99,
-    fmt: v => v >= 99 ? '失敗' : 'ズレ ' + v.toFixed(2) + '%',
+    fmt: v => v >= 99 ? T('失敗') : T('ズレ {n}%', { n: v.toFixed(2) }),
     play: playCut,
     // リザルト用:その人の切った円を el の中に描く(data は submit の2つ目で送ったもの)
     result: drawCutResult
@@ -411,7 +411,7 @@ GAMES.push(
     desc: '真ん中の点からドラッグして、お題の角度の線を引こう!<br>灰色の線とのあいだの角度で判定。<br>離したあと「決定!」で確定。お題に近いほど上位。',
     lowerBetter: true, miss: 999,
     isMiss: v => v >= 999,
-    fmt: v => v >= 999 ? '失敗' : '誤差 ' + v.toFixed(1) + '°',
+    fmt: v => v >= 999 ? T('失敗') : T('誤差 {n}°', { n: v.toFixed(1) }),
     play: playAngle,
     // リザルト用:その人の線を el の中に描く(data は submit の2つ目で送ったもの)
     result: drawAngleResult
@@ -427,14 +427,14 @@ function playCut(stage, round, submit) {
 
   // カウントダウン中(5秒)にお題を見せる
   game.desc = game.descBase +
-    `<div style="margin-top:14px;font-size:22px">お題 <b style="color:#ffcc33">${N}等分</b></div>`;
+    `<div style="margin-top:14px;font-size:22px">${T('お題')} <b style="color:#ffcc33">${T('{n}等分', { n: N })}</b></div>`;
 
   countdown(stage, game, round, () => {
     stage.innerHTML =
-      `<div class="center" style="font-size:22px;margin:6px 0"><b style="color:#ffcc33">${N}等分</b>に切って!</div>` +
-      `<div class="center sub" id="info">あと <b id="rest">${N}</b> 本 ・ 残り <b id="left">15.0</b> 秒</div>` +
+      `<div class="center" style="font-size:22px;margin:6px 0">${T('{p}に切って!', { p: `<b style="color:#ffcc33">${T('{n}等分', { n: N })}</b>` })}</div>` +
+      `<div class="center sub" id="info">${T('あと {n} 本 ・ 残り {t} 秒', { n: `<b id="rest">${N}</b>`, t: '<b id="left">15.0</b>' })}</div>` +
       `<canvas id="pad" style="display:block;width:100%;height:50vh;margin-top:8px;touch-action:none"></canvas>` +
-      `<div class="center"><button class="btn" id="undo" style="margin-top:8px;min-width:150px">↶ 1つ戻る</button></div>`;
+      `<div class="center"><button class="btn" id="undo" style="margin-top:8px;min-width:150px">↶ ${T('1つ戻る')}</button></div>`;
 
     const cv = stage.querySelector('#pad');
     const info = stage.querySelector('#info');
@@ -489,7 +489,7 @@ function playCut(stage, round, submit) {
     const judge = () => {
       const dev = cutDeviation(cuts, N);
       draw(true);
-      info.innerHTML = `平均のズレ <b style="color:#ffcc33">${dev.toFixed(2)}%</b>`;
+      info.innerHTML = `${T('平均のズレ')} <b style="color:#ffcc33">${dev.toFixed(2)}%</b>`;
       finish(dev);
     };
 
@@ -601,16 +601,16 @@ function playAngle(stage, round, submit) {
 
   // カウントダウン中(5秒)にお題を見せる
   game.desc = game.descBase +
-    `<div style="margin-top:14px;font-size:22px">お題 <b style="color:#ffcc33">${target}度</b></div>`;
+    `<div style="margin-top:14px;font-size:22px">${T('お題')} <b style="color:#ffcc33">${T('{n}度', { n: target })}</b></div>`;
 
   countdown(stage, game, round, () => {
     stage.innerHTML =
-      `<div class="center" style="font-size:22px;margin:6px 0"><b style="color:#ffcc33">${target}度</b> を作って!</div>` +
-      `<div class="center sub" id="info">灰色の線から ${target}度 ・ 残り <b id="left">15.0</b> 秒</div>` +
+      `<div class="center" style="font-size:22px;margin:6px 0">${T('{a} を作って!', { a: `<b style="color:#ffcc33">${T('{n}度', { n: target })}</b>` })}</div>` +
+      `<div class="center sub" id="info">${T('灰色の線から {a} ・ 残り {t} 秒', { a: T('{n}度', { n: target }), t: '<b id="left">15.0</b>' })}</div>` +
       `<canvas id="pad" style="display:block;width:100%;height:50vh;margin-top:8px;touch-action:none"></canvas>` +
       `<div class="center" style="display:flex;gap:10px;justify-content:center;margin-top:8px">` +
-      `<button class="btn" id="redo" style="min-width:130px">やり直す</button>` +
-      `<button class="btn" id="ok" style="min-width:130px">決定!</button></div>`;
+      `<button class="btn" id="redo" style="min-width:130px">${T('やり直す')}</button>` +
+      `<button class="btn" id="ok" style="min-width:130px">${T('決定!')}</button></div>`;
 
     const cv = stage.querySelector('#pad');
     const info = stage.querySelector('#info');
@@ -658,7 +658,7 @@ function playAngle(stage, round, submit) {
       const ang = angleBetween(cur, ref);
       const err = Math.round(Math.abs(ang - target) * 10) / 10;
       draw(true);
-      info.innerHTML = `あなたの角度 <b style="color:#ffcc33">${ang.toFixed(1)}°</b> ・ 誤差 <b style="color:#ffcc33">${err.toFixed(1)}°</b>`;
+      info.innerHTML = `${T('あなたの角度')} <b style="color:#ffcc33">${ang.toFixed(1)}°</b> ・ ${T('誤差')} <b style="color:#ffcc33">${err.toFixed(1)}°</b>`;
       finish(err, cur);
     };
 
@@ -767,7 +767,7 @@ GAMES.push(
     desc: '審判のお題どおりに旗を上げ下げしよう!<br>下の「赤」「白」ボタンを押している間=上げる、離す=下げる。<br>「〜ない」のひっかけは、一瞬でも動かしたらアウト。お題に出ていない旗も動かさない。<br>だんだん速くなる! お題は15こ(1こ1点)+連続正解ボーナス(4連続+1・8連続+2・12連続+3・15連続+4)。最高25点。',
     lowerBetter: false, miss: 0,
     isMiss: v => v <= 0,
-    fmt: v => v + '点',
+    fmt: v => T('{n}点', { n: v }),
     play: playHata,
     // リザルト用:15個の○×
     result: drawHataResult
@@ -777,7 +777,7 @@ GAMES.push(
     desc: 'ほんの少しだけ色がちがうマスを1つ探してタッチ!<br>15秒で何問正解できるか勝負。<br>まちがえると1秒おやすみ。<br>正解数が多いほど上位。0問は0点。',
     lowerBetter: false, miss: 0,
     isMiss: v => v <= 0,
-    fmt: v => v + '問',
+    fmt: v => T('{n}問', { n: v }),
     play: playOddColor
   }
 );
@@ -819,7 +819,7 @@ function hataMake(seed) {
       if (!neg) state[f] = up;
       const mid = kind === 2 && s === 0;                     // 2点のお題の前半は「〜て」「〜ないで」
       const text = (f === 'r' ? '赤' : '白') + (up ? '上げ' : '下げ') + (neg ? (mid ? 'ないで' : 'ない') : 'て');
-      parts.push({ f, up, neg, text, q, line: s });
+      parts.push({ f, up, neg, mid, text, q, line: s });
     }
   });
   // 時間を決める
@@ -858,6 +858,30 @@ function hataScore(oks) {
   return { pts, bonus, best, total: pts + bonus };
 }
 
+/* 審判のお題のことば(言語ごと)。お題は [色][上げ/下げ][て/ない…] の3つの部分に分ける。
+   出る速さは日本語の文字数で決める(全員同じ)。ほかの言語は、日本語の同じ部分が出るあいだに、その部分を少しずつ出す。
+   どの言語でも「〜ない」かどうかがわかるのは、3つ目の部分が出はじめたとき(日本語と同じ) */
+const HATA_WORDS = {
+  ja: { r: '赤', w: '白', up: '上げ', down: '下げ', go: 'て', no: 'ない', goMid: 'て', noMid: 'ないで' },
+  en: { r: 'Red ', w: 'White ', up: 'up', down: 'down', go: '!', no: '… NOT!', goMid: ',', noMid: '… NOT,' },
+  ko: { r: '빨강 ', w: '하양 ', up: '올', down: '내', go: '려!', no: '리지 마!', goMid: '리고', noMid: '리지 말고' }
+};
+const hataFont = () => LANG === 'ja' ? 34 : 30;   // 英語・韓国語は字が多いので少し小さく
+// お題 p を、日本語で n 文字目まで出したところの文字(HTML)。色の部分は旗の色にする
+function hataShow(p, n) {
+  const J = HATA_WORDS.ja, W = HATA_WORDS[LANG] || J;
+  const end = p.neg ? (p.mid ? 'noMid' : 'no') : (p.mid ? 'goMid' : 'go');
+  const keys = [p.f, p.up ? 'up' : 'down', end];
+  let rest = n, out = '';
+  keys.forEach((k, i) => {
+    const j = J[k], w = W[k];
+    const got = Math.max(0, Math.min(j.length, rest)); rest -= j.length;
+    const s = h(w.slice(0, Math.ceil(w.length * got / j.length)));
+    out += i === 0 && s ? `<span style="color:${p.f === 'r' ? '#ff5c6c' : '#ffffff'};${p.f === 'w' ? 'text-shadow:0 0 6px rgba(255,255,255,0.6)' : ''}">${s}</span>` : s;
+  });
+  return out;
+}
+
 function playHata(stage, round, submit) {
   const game = GAMES.find(g => g.id === 'hata');
   const { parts, total } = hataMake(Math.round((round.delay || 3000) * 1000));
@@ -866,14 +890,14 @@ function playHata(stage, round, submit) {
     const btn = (f, label) => `<div data-f="${f}" style="flex:1;height:17vh;min-height:84px;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:bold;border-radius:18px;user-select:none;-webkit-user-select:none;touch-action:none;` +
       (f === 'r' ? 'background:#c8323f;color:#fff;border:3px solid #ff5c6c' : 'background:#e9ecf6;color:#1a1f3a;border:3px solid #ffffff') + `">${label}</div>`;
     stage.innerHTML =
-      `<div class="center sub" style="font-size:16px;margin:2px 0">得点 <b id="pt" style="color:#ffcc33;font-size:22px">0</b> ・ 連続 <b id="run">0</b></div>` +
+      `<div class="center sub" style="font-size:16px;margin:2px 0">${T('得点')} <b id="pt" style="color:#ffcc33;font-size:22px">0</b> ・ ${T('連続')} <b id="run">0</b></div>` +
       `<div id="qbox" style="position:relative;height:96px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);border-radius:14px">` +
-      `<div id="l0" style="font-size:34px;font-weight:bold;line-height:1.25;min-height:42px;letter-spacing:1px"></div>` +
-      `<div id="l1" style="font-size:34px;font-weight:bold;line-height:1.25;min-height:0;letter-spacing:1px"></div>` +
+      `<div id="l0" style="font-size:${hataFont()}px;font-weight:bold;line-height:1.25;min-height:42px;letter-spacing:1px"></div>` +
+      `<div id="l1" style="font-size:${hataFont()}px;font-weight:bold;line-height:1.25;min-height:0;letter-spacing:1px"></div>` +
       `<div id="mark" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:90px;font-weight:bold;pointer-events:none;opacity:0"></div>` +
       `<div id="combo" style="position:absolute;right:8px;top:4px;font-size:16px;font-weight:bold;color:#ffcc33;opacity:0"></div></div>` +
       `<canvas id="pad" style="display:block;width:100%;height:30vh;touch-action:none"></canvas>` +
-      `<div id="btns" style="display:flex;gap:28px;width:100%;-webkit-tap-highlight-color:transparent">${btn('r', '赤')}${btn('w', '白')}</div>`;
+      `<div id="btns" style="display:flex;gap:28px;width:100%;-webkit-tap-highlight-color:transparent">${btn('r', T('赤'))}${btn('w', T('白'))}</div>`;
     const ptEl = stage.querySelector('#pt'), runEl = stage.querySelector('#run');
     const lines = [stage.querySelector('#l0'), stage.querySelector('#l1')];
     const mark = stage.querySelector('#mark'), combo = stage.querySelector('#combo');
@@ -892,8 +916,6 @@ function playHata(stage, round, submit) {
     let cur = 0, startedK = -1, moved = { r: false, w: false }, start = { r: false, w: false };
     let shownQ = -1, done = false, iv = null, markT = -9, comboT = -9;
     const oks = [];
-
-    const colorText = s => s.replace(/^(赤|白)/, m => `<span style="color:${m === '赤' ? '#ff5c6c' : '#ffffff'};${m === '白' ? 'text-shadow:0 0 6px rgba(255,255,255,0.6)' : ''}">${m}</span>`);
 
     // 旗を動かす(ボタンの押す・離す)
     const setFlag = (f, v) => {
@@ -932,7 +954,7 @@ function playHata(stage, round, submit) {
       if (p.q !== shownQ) { shownQ = p.q; lines[0].innerHTML = ''; lines[1].innerHTML = ''; }
       if (e < p.ws) return;
       const n = Math.min(p.text.length, Math.floor((e - p.ws) / p.cms) + 1);
-      lines[p.line].innerHTML = colorText(p.text.slice(0, n));
+      lines[p.line].innerHTML = hataShow(p, n);
     };
 
     // プレイヤーの後ろ姿
@@ -992,7 +1014,7 @@ function playHata(stage, round, submit) {
         mark.textContent = ok ? '○' : '×';
         mark.style.color = ok ? '#35d07f' : '#ff5c6c';
         markT = e / 1000;
-        if (ok && HATA_BONUS[run]) { combo.textContent = run + '連続! +' + HATA_BONUS[run]; comboT = e / 1000; }
+        if (ok && HATA_BONUS[run]) { combo.textContent = T('{n}連続! +{b}', { n: run, b: HATA_BONUS[run] }); comboT = e / 1000; }
         cur++;
       }
       if (cur < parts.length && startedK !== cur && e >= parts[cur].ws) {   // 部分の始まり:いまの旗の状態を覚える
@@ -1036,7 +1058,7 @@ function drawHataResult(el, data, size) {
   const cw = w / per, ch = h / 2;
   ctx.fillStyle = '#9aa3c7'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
   ctx.font = `${Math.max(11, Math.round(Math.min(H * 0.13, w / 23)))}px sans-serif`;
-  ctx.fillText('正解 ' + (data.p != null ? data.p : '?') + '/' + n + ' ・ 最大 ' + (data.c != null ? data.c : '?') + '連続 ・ ボーナス +' + (data.b || 0), w / 2, H * 0.88);
+  ctx.fillText(T('正解 {p}/{n} ・ 最大 {c}連続 ・ ボーナス +{b}', { p: data.p != null ? data.p : '?', n, c: data.c != null ? data.c : '?', b: data.b || 0 }), w / 2, H * 0.88);
   for (let i = 0; i < n; i++) {
     const x = (i % per + 0.5) * cw, y = (Math.floor(i / per) + 0.5) * ch;
     const r = Math.min(cw, ch) * 0.32;
@@ -1055,7 +1077,7 @@ function playOddColor(stage, round, submit) {
 
   countdown(stage, game, round, () => {
     stage.innerHTML =
-      `<div class="center sub" style="font-size:18px;margin:4px 0">正解 <b id="ok" style="color:#ffcc33;font-size:26px">0</b> 問 ・ 残り <b id="left">15.0</b> 秒</div>` +
+      `<div class="center sub" style="font-size:18px;margin:4px 0">${T('正解 {n} 問 ・ 残り {t} 秒', { n: '<b id="ok" style="color:#ffcc33;font-size:26px">0</b>', t: '<b id="left">15.0</b>' })}</div>` +
       `<div class="center sub" id="msg" style="min-height:24px;color:#ff8a8a"></div>` +
       `<div id="grid" style="display:grid;gap:6px;width:100%;max-width:440px;margin:6px auto 0;-webkit-tap-highlight-color:transparent"></div>`;
     const grid = stage.querySelector('#grid');
@@ -1083,7 +1105,7 @@ function playOddColor(stage, round, submit) {
       clearInterval(iv);
       grid.style.opacity = '0.35';
       msg.style.color = '#ffcc33';
-      msg.textContent = '終了! ' + n + '問';
+      msg.textContent = T('終了!') + ' ' + T('{n}問', { n });
       submit(n);
     };
 
@@ -1098,7 +1120,7 @@ function playOddColor(stage, round, submit) {
       } else {                                   // まちがい:1秒おやすみ(同じ問題のまま)
         lock = true;
         grid.style.opacity = '0.35';
-        msg.textContent = 'ちがう! 1秒おやすみ';
+        msg.textContent = T('ちがう! 1秒おやすみ');
         timers.push(setTimeout(() => {
           if (done) return;
           lock = false;
@@ -1141,7 +1163,7 @@ GAMES.push(
     desc: '1から16まで、小さい順に全部タッチ!<br>数字の並びは全員同じ。<br>早くクリアするほど上位。<br>17秒以内に終わらなければ、押せた数で順位が決まる。',
     lowerBetter: true, miss: 99,
     isMiss: v => v >= 99,
-    fmt: v => v >= 99 ? '失敗' : v >= 20 ? (36 - Math.round(v)) + '個まで' : v.toFixed(2) + '秒',
+    fmt: v => v >= 99 ? T('失敗') : v >= 20 ? T('{n}個まで', { n: 36 - Math.round(v) }) : T('{n}秒', { n: v.toFixed(2) }),
     play: playNumTouch
   },
   {
@@ -1149,7 +1171,7 @@ GAMES.push(
     desc: '上から降ってくる物をよけ続けよう!<br>操作は「地面より下」で指を左右に動かす。<br>ジグザグの葉っぱ、巨大岩、途中で速くなる玉、割れる岩、赤く光った所に落ちる柱にも注意!<br>長く生き残るほど上位。15秒耐えればクリア。',
     lowerBetter: false, miss: 0,
     isMiss: v => v <= 0,
-    fmt: v => v.toFixed(2) + '秒',
+    fmt: v => T('{n}秒', { n: v.toFixed(2) }),
     play: playDodge
   }
 );
@@ -1169,7 +1191,7 @@ function playNumTouch(stage, round, submit) {
 
   countdown(stage, game, round, () => {
     stage.innerHTML =
-      `<div class="center sub" style="font-size:18px;margin:4px 0">次は <b id="next" style="color:#ffcc33;font-size:30px">1</b> ・ <b id="time">0.00</b> 秒</div>` +
+      `<div class="center sub" style="font-size:18px;margin:4px 0">${T('次は {n} ・ {t} 秒', { n: '<b id="next" style="color:#ffcc33;font-size:30px">1</b>', t: '<b id="time">0.00</b>' })}</div>` +
       `<div id="grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%;max-width:440px;margin:10px auto 0;-webkit-tap-highlight-color:transparent"></div>`;
     const grid = stage.querySelector('#grid');
     const nextEl = stage.querySelector('#next');
@@ -1238,7 +1260,7 @@ function playDodge(stage, round, submit) {
 
   countdown(stage, game, round, () => {
     stage.innerHTML =
-      `<div class="center sub" id="top" style="font-size:18px;margin:4px 0">生き残り <b id="t" style="color:#ffcc33;font-size:26px">0.00</b> 秒</div>` +
+      `<div class="center sub" id="top" style="font-size:18px;margin:4px 0">${T('生き残り {t} 秒', { t: '<b id="t" style="color:#ffcc33;font-size:26px">0.00</b>' })}</div>` +
       `<canvas id="pad" style="display:block;width:100%;height:68vh;margin-top:4px;touch-action:none"></canvas>`;
     const cv = stage.querySelector('#pad');
     const top = stage.querySelector('#top');
@@ -1277,7 +1299,7 @@ function playDodge(stage, round, submit) {
       ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(W, gy); ctx.stroke();
       ctx.fillStyle = 'rgba(242,244,255,0.55)';
       ctx.font = 'bold 15px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('▼ ここで指を左右に動かす ▼', W / 2, gy + (H - gy) * 0.72);
+      ctx.fillText('▼ ' + T('ここで指を左右に動かす') + ' ▼', W / 2, gy + (H - gy) * 0.72);
       if (touching) {
         ctx.fillStyle = 'rgba(255,204,51,0.55)';
         ctx.beginPath(); ctx.arc(X(tx), gy + (H - gy) * 0.3, 15, 0, Math.PI * 2); ctx.fill();
@@ -1335,7 +1357,7 @@ function playDodge(stage, round, submit) {
       clearInterval(iv);
       const v = Math.max(0.01, Math.round(t * 100) / 100);
       tEl.textContent = v.toFixed(2);
-      top.innerHTML = (hit ? 'ヒット! ' : 'クリア! ') + '生き残り <b style="color:#ffcc33;font-size:26px">' + v.toFixed(2) + '</b> 秒';
+      top.innerHTML = T(hit ? 'ヒット!' : 'クリア!') + ' ' + T('生き残り {t} 秒', { t: '<b style="color:#ffcc33;font-size:26px">' + v.toFixed(2) + '</b>' });
       draw(t);
       submit(v);
     };

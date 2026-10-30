@@ -1,5 +1,7 @@
 /* 起動・ホーム・練習モード・ルームの作成と入室。Firebaseの設定もここ。 */
 
+i18nGames();   // ゲームの名前と説明を、選んだ言語で出すようにする(i18n.js)
+
 /* ===== ここを自分のFirebaseの値に書き換える ===== */
 const firebaseConfig = {
   apiKey: "AIzaSyBxf-38qXL-cUFIdJFd_x0JCJyXlHOKZHE",
@@ -56,7 +58,7 @@ function withEndShow(stage, fn) {
       stage.style.position = 'relative';
       const ov = document.createElement('div');
       ov.style.cssText = 'position:absolute;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;background:rgba(15,18,32,0.35);touch-action:none';
-      ov.innerHTML = '<div style="font-size:56px;font-weight:800;color:#ffcc33;text-shadow:0 2px 12px #000">終了!</div>';
+      ov.innerHTML = '<div style="font-size:56px;font-weight:800;color:#ffcc33;text-shadow:0 2px 12px #000">' + T('終了!') + '</div>';
       ov.addEventListener('pointerdown', ev => ev.preventDefault());   // 終わったあとの誤タップを止める
       stage.appendChild(ov);
     }
@@ -88,12 +90,12 @@ function titleOk() {
 }
 function titleHtml(game) {
   if (!db) return '';
-  const note = titleOk() ? '' : '<div style="font-size:12px;color:#9aa3c7;margin-top:2px">ここではタイトルは取れません(アーケード・2人以上のときだけ)</div>';
+  const note = titleOk() ? '' : '<div style="font-size:12px;color:#9aa3c7;margin-top:2px">' + T('ここではタイトルは取れません(アーケード・2人以上のときだけ)') + '</div>';
   const r = records[game.id];
   const body = r && typeof r.v === 'number'
     ? `<b style="color:#f2f4ff">${h(r.name || '???')}</b>(${h(recText(game, r))})`
-    : 'まだいない! 最初の記録を出そう';
-  return `<div style="margin:0 0 12px;padding:8px 12px;border-radius:10px;background:rgba(255,204,51,0.12);color:#ffcc33;font-size:15px">👑 タイトルホルダー: ${body}${note}</div>`;
+    : T('まだいない! 最初の記録を出そう');
+  return `<div style="margin:0 0 12px;padding:8px 12px;border-radius:10px;background:rgba(255,204,51,0.12);color:#ffcc33;font-size:15px">👑 ${T('タイトルホルダー')}: ${body}${note}</div>`;
 }
 /* 記録を出したら呼ぶ。いまの記録より良ければ書きかえる(2人同時でも、良いほうが残る) */
 function tryRecord(game, v, x, roundKey, onNew) {
@@ -121,7 +123,7 @@ function init() {
   myName = localStorage.getItem('name') || '';
 
   if (typeof firebase === 'undefined') {
-    setApp('<h1>読み込みエラー</h1><div class="card">Firebaseを読み込めませんでした。通信状況を確認して、ページを再読み込みしてね。</div>');
+    setApp('<h1>' + T('読み込みエラー') + '</h1><div class="card">' + T('Firebaseを読み込めませんでした。通信状況を確認して、ページを再読み込みしてね。') + '</div>');
     return;
   }
   if (!firebaseConfig.apiKey || firebaseConfig.apiKey === 'YOUR_API_KEY') {
@@ -142,7 +144,7 @@ function init() {
 
   // 見えない匿名ログイン。ログインのID(uid)を、そのままプレイヤーのID(pid)にする。
   // データベースのルールで「自分のデータしか書けない」をチェックするのに使う
-  setApp('<h1>🎮 PartyArcade</h1><div class="card center sub">接続中…</div>');
+  setApp('<h1>🎮 PartyArcade</h1><div class="card center sub">' + T('接続中…') + '</div>');
   let started = false;
   const go = () => { if (started) return; started = true; localStorage.setItem('pid', pid); startup(); };
   try {
@@ -170,23 +172,26 @@ function startup() {
 function renderHome(msg) {
   setApp(`
     <h1>🎮 PartyArcade</h1>
+    ${langSwitchHtml()}
     <div class="card">
-      <label>なまえ</label>
-      <input id="name" maxlength="10" placeholder="なまえを入力" value="${h(myName)}">
+      <label>${T('なまえ')}</label>
+      <input id="name" maxlength="10" placeholder="${T('なまえを入力')}" value="${h(myName)}">
     </div>
     <div class="card">
-      <button class="btn" id="create">ルームを作る(管理者になる)</button>
+      <button class="btn" id="create">${T('ルームを作る(管理者になる)')}</button>
     </div>
     <div class="card">
-      <label>ルームID</label>
-      <input id="rid" inputmode="numeric" maxlength="4" placeholder="4けたの数字">
-      <button class="btn sub" id="join">入室する</button>
+      <label>${T('ルームID')}</label>
+      <input id="rid" inputmode="numeric" maxlength="4" placeholder="${T('4けたの数字')}">
+      <button class="btn sub" id="join">${T('入室する')}</button>
     </div>
     <div class="card">
-      <button class="btn sub" id="practice">練習モード(1人で遊ぶ)</button>
+      <button class="btn sub" id="practice">${T('練習モード(1人で遊ぶ)')}</button>
     </div>
     <div class="msg" id="msg">${h(msg || '')}</div>
-    <p class="center" style="font-size:13px;margin:4px 0"><a href="/" style="color:#9aa3c7">Muddy's Games トップ</a> ・ <a href="/privacy.html" style="color:#9aa3c7">プライバシーポリシー</a></p>`);
+    <p class="center" style="font-size:13px;margin:4px 0"><a href="${sitePath('/')}" style="color:#9aa3c7">${T("Muddy's Games トップ")}</a> ・ <a href="${sitePath('/privacy.html')}" style="color:#9aa3c7">${T('プライバシーポリシー')}</a></p>`);
+  // 言語の切りかえ: 入力中のなまえは残したまま、画面を作り直す
+  langSwitchInit(() => { const n = $('#name'); if (n) myName = n.value; renderHome(msg); });
   $('#create').onclick = createRoom;
   $('#join').onclick = joinRoom;
   $('#practice').onclick = renderPractice;
@@ -240,13 +245,13 @@ let practiceSel = GAMES[0].id; // 選んでいるゲーム(練習モードを出
 function renderPractice() {
   clearTimers();
   setApp(`
-    <h1>練習モード</h1>
+    <h1>${T('練習モード')}</h1>
     <div class="card">
-      <div class="sub">遊ぶゲームを回して選ぶ(記録は保存されない)</div>
+      <div class="sub">${T('遊ぶゲームを回して選ぶ(記録は保存されない)')}</div>
       ${pickerHtml('pp', practiceSel, true)}
-      <button class="btn" id="go">このゲームで遊ぶ</button>
+      <button class="btn" id="go">${T('このゲームで遊ぶ')}</button>
     </div>
-    <button class="btn ghost" id="back">ホームに戻る</button>`);
+    <button class="btn ghost" id="back">${T('ホームに戻る')}</button>`);
   pickerInit('pp', id => { practiceSel = id; });
   $('#go').onclick = () => startPractice(practiceSel);
   $('#back').onclick = () => renderHome();
@@ -256,9 +261,9 @@ function startPractice(id) {
   clearTimers();
   const round = { index: 0, startAt: serverNow() + COUNTDOWN_MS, delay: 2000 + Math.floor(Math.random() * 3000) };
   setApp(`
-    <div class="top"><span>練習モード</span><span>${h(g.title)}</span></div>
+    <div class="top"><span>${T('練習モード')}</span><span>${h(g.title)}</span></div>
     <div id="stage" class="stage"></div>
-    <button class="btn ghost" id="quit">やめる</button>`);
+    <button class="btn ghost" id="quit">${T('やめる')}</button>`);
   let done = false;
   $('#quit').onclick = () => { done = true; clearTimers(); renderPractice(); };
   practiceSel = id;
@@ -269,10 +274,10 @@ function practiceResult(g, v, x) {
   guardUntil = Date.now() + 700;
   setApp(`
     <h1>${h(g.title)}</h1>
-    <div class="card center"><div class="sub">あなたの記録</div><div class="big-num" style="font-size:44px">${h(g.fmt(v, x))}</div>${g.result && x !== undefined ? '<div class="viz" id="rbox"></div>' : (g.viz && x ? g.viz(v, x) : '')}</div>
-    <button class="btn" id="again">もう一度</button>
-    <button class="btn sub" id="pick">ゲームを選ぶ</button>
-    <button class="btn ghost" id="home">ホームに戻る</button>`);
+    <div class="card center"><div class="sub">${T('あなたの記録')}</div><div class="big-num" style="font-size:44px">${h(g.fmt(v, x))}</div>${g.result && x !== undefined ? '<div class="viz" id="rbox"></div>' : (g.viz && x ? g.viz(v, x) : '')}</div>
+    <button class="btn" id="again">${T('もう一度')}</button>
+    <button class="btn sub" id="pick">${T('ゲームを選ぶ')}</button>
+    <button class="btn ghost" id="home">${T('ホームに戻る')}</button>`);
   if (g.result && x !== undefined) callResult(g, $('#rbox'), x, 200);
   $('#again').onclick = guarded(() => startPractice(g.id));
   $('#pick').onclick = guarded(renderPractice);
@@ -281,7 +286,7 @@ function practiceResult(g, v, x) {
 const setMsg = t => { const m = $('#msg'); if (m) m.textContent = t; };
 function getName() {
   const v = $('#name').value.trim();
-  if (!v) { setMsg('なまえを入力してね'); return null; }
+  if (!v) { setMsg(T('なまえを入力してね')); return null; }
   myName = v; localStorage.setItem('name', v); return v;
 }
 
@@ -297,7 +302,7 @@ async function cleanupOldRooms() {
 async function createRoom() {
   if (busy) return;
   const name = getName(); if (!name) return;
-  busy = true; setMsg('作成中…');
+  busy = true; setMsg(T('作成中…'));
   try {
     await cleanupOldRooms();
     for (let t = 0; t < 10; t++) {
@@ -312,8 +317,8 @@ async function createRoom() {
       });
       busy = false; enterRoom(id); return;
     }
-    setMsg('ルームを作れませんでした。もう一度試してね');
-  } catch (e) { setMsg('エラー: ' + e.message); }
+    setMsg(T('ルームを作れませんでした。もう一度試してね'));
+  } catch (e) { setMsg(T('エラー: ') + e.message); }
   busy = false;
 }
 
@@ -321,24 +326,24 @@ async function joinRoom() {
   if (busy) return;
   const name = getName(); if (!name) return;
   const id = $('#rid').value.trim();
-  if (!/^\d{4}$/.test(id)) { setMsg('ルームIDは4けたの数字だよ'); return; }
-  busy = true; setMsg('入室中…');
+  if (!/^\d{4}$/.test(id)) { setMsg(T('ルームIDは4けたの数字だよ')); return; }
+  busy = true; setMsg(T('入室中…'));
   try {
     const ref = db.ref('minigame-rooms/' + id);
     const r = (await ref.once('value')).val();
-    if (!r) { setMsg('そのルームIDは見つかりません'); busy = false; return; }
+    if (!r) { setMsg(T('そのルームIDは見つかりません')); busy = false; return; }
     const players = r.players || {};
     if (!players[pid]) {
-      if (r.phase !== 'lobby') { setMsg('ゲーム中なので入れません'); busy = false; return; }
+      if (r.phase !== 'lobby') { setMsg(T('ゲーム中なので入れません')); busy = false; return; }
       let nm = name, k = 2;
       const names = Object.values(players).map(p => p.name);
       while (names.includes(nm)) nm = name + (k++);
       // 自分の場所(players/自分のID)にだけ書く(ルールで、人の場所には書けないため)
-      if (Object.keys(players).length >= MAX_PLAYERS) { setMsg('満員です(最大' + MAX_PLAYERS + '人)'); busy = false; return; }
+      if (Object.keys(players).length >= MAX_PLAYERS) { setMsg(T('満員です(最大{n}人)', { n: MAX_PLAYERS })); busy = false; return; }
       await ref.child('players/' + pid).set({ name: nm, joinedAt: Date.now() });
     }
     busy = false; enterRoom(id);
-  } catch (e) { setMsg('エラー: ' + e.message); busy = false; }
+  } catch (e) { setMsg(T('エラー: ') + e.message); busy = false; }
 }
 
 /* ---------- ルーム ---------- */
@@ -347,8 +352,8 @@ function enterRoom(id) {
   roomRef = db.ref('minigame-rooms/' + id);
   roomCb = roomRef.on('value', s => {
     room = s.val();
-    if (!room) { leaveLocal('ルームが閉じられました'); return; }
-    if (!room.players || !room.players[pid]) { leaveLocal('ルームから外れました'); return; }
+    if (!room) { leaveLocal(T('ルームが閉じられました')); return; }
+    if (!room.players || !room.players[pid]) { leaveLocal(T('ルームから外れました')); return; }
     render();
     adminCheck();
   });
@@ -367,9 +372,9 @@ function leaveRoom() {
   const isAdmin = room.admin === pid;
   const others = Object.entries(room.players).filter(([id]) => id !== pid)
     .sort((a, b) => (a[1].joinedAt || 0) - (b[1].joinedAt || 0));
-  const msg = !isAdmin ? 'ルームから出る?'
-    : others.length ? 'ルームから出る?(' + others[0][1].name + ' が新しい管理者になります)'
-    : 'ルームを解散する?';
+  const msg = !isAdmin ? T('ルームから出る?')
+    : others.length ? T('ルームから出る?({name} が新しい管理者になります)', { name: others[0][1].name })
+    : T('ルームを解散する?');
   if (!confirm(msg)) return;
   const ref = db.ref('minigame-rooms/' + roomId), me = pid;
   leaveLocal('');

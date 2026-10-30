@@ -11,8 +11,8 @@ const multAt = i => {
   if (c.finalUp && i === c.rounds - 1) return 2;
   return 1;
 };
-const bonusLabel = i => (room.config.finalUp && i === room.config.rounds - 1) ? 'ファイナルアップ!' : 'ダブルアップ!';
-const leaveLabel = () => (room.admin === pid && Object.keys(room.players).length === 1) ? 'ルームを解散' : '退出';
+const bonusLabel = i => (room.config.finalUp && i === room.config.rounds - 1) ? T('ファイナルアップ!') : T('ダブルアップ!');
+const leaveLabel = () => (room.admin === pid && Object.keys(room.players).length === 1) ? T('ルームを解散') : T('退出');
 
 /* 全ゲームを1周ずつシャッフルして並べる(ゲーム数より多いラウンドだけ重複する) */
 function makePlaylist(n) {
@@ -35,16 +35,16 @@ function settingsCard() {
     `<button ${dis} class="${String(cur) === String(v) ? 'on' : ''}" data-set="${key}" data-v="${h(v)}">${h(label)}</button>`).join('')}</div>`;
   let body;
   if (st.mode === 'solo') {
-    body = `<div class="sub">選んだゲームを1回だけ遊ぶ。ポイントは付かない。</div>
-      <div class="sub">ゲーム${isAdmin ? '(回して選ぶ)' : ''}</div>${pickerHtml('sp', st.soloGame, isAdmin)}`;
+    body = `<div class="sub">${T('選んだゲームを1回だけ遊ぶ。ポイントは付かない。')}</div>
+      <div class="sub">${isAdmin ? T('ゲーム(回して選ぶ)') : T('ゲーム')}</div>${pickerHtml('sp', st.soloGame, isAdmin)}`;
   } else {
-    body = `<div class="sub">ランダムなゲームを続けて遊び、合計ポイントで優勝を決める。</div>
-      <div class="sub">ラウンド数</div>${seg('rounds', [4, 5, 6, 7, 8].map(n => [n, String(n)]), st.rounds, 'num')}
-      <div class="sub">ボーナス(チェックしなければなし)</div>
-      <label class="chk"><input type="checkbox" ${dis} ${st.doubleUp ? 'checked' : ''} data-chk="doubleUp"><span><b>ダブルアップ</b><small>ランダムな1ラウンドのポイントが2倍。そのゲームの開始前に発表される。</small></span></label>
-      <label class="chk"><input type="checkbox" ${dis} ${st.finalUp ? 'checked' : ''} data-chk="finalUp"><span><b>ファイナルアップ</b><small>最終ラウンドのポイントが2倍。</small></span></label>`;
+    body = `<div class="sub">${T('ランダムなゲームを続けて遊び、合計ポイントで優勝を決める。')}</div>
+      <div class="sub">${T('ラウンド数')}</div>${seg('rounds', [4, 5, 6, 7, 8].map(n => [n, String(n)]), st.rounds, 'num')}
+      <div class="sub">${T('ボーナス(チェックしなければなし)')}</div>
+      <label class="chk"><input type="checkbox" ${dis} ${st.doubleUp ? 'checked' : ''} data-chk="doubleUp"><span><b>${T('ダブルアップ')}</b><small>${T('ランダムな1ラウンドのポイントが2倍。そのゲームの開始前に発表される。')}</small></span></label>
+      <label class="chk"><input type="checkbox" ${dis} ${st.finalUp ? 'checked' : ''} data-chk="finalUp"><span><b>${T('ファイナルアップ')}</b><small>${T('最終ラウンドのポイントが2倍。')}</small></span></label>`;
   }
-  return `<div class="card"><div class="sub">モード${isAdmin ? '' : '(管理者が決める)'}</div>${seg('mode', [['arcade', 'アーケード'], ['solo', 'ソロゲーム']], st.mode)}${body}</div>`;
+  return `<div class="card"><div class="sub">${isAdmin ? T('モード') : T('モード(管理者が決める)')}</div>${seg('mode', [['arcade', T('アーケード')], ['solo', T('ソロゲーム')]], st.mode)}${body}</div>`;
 }
 
 function setSetting(k, v) {
@@ -55,7 +55,7 @@ function setSetting(k, v) {
 
 function startGame() {
   const st = settings();
-  if (st.mode !== 'solo' && Object.keys(room.players).length < 2) { toast('アーケードは2人からです'); return; }
+  if (st.mode !== 'solo' && Object.keys(room.players).length < 2) { toast(T('アーケードは2人からです')); return; }
   let cfg;
   if (st.mode === 'solo') {
     // 回した直後にスタートを押しても、画面で選んでいるゲームが始まるようにする
@@ -82,18 +82,18 @@ function renderLobby() {
   const ps = Object.entries(room.players).sort((a, b) => (a[1].joinedAt || 0) - (b[1].joinedAt || 0));
   const isAdmin = room.admin === pid;
   setApp(`
-    <h1>ロビー</h1>
-    <div class="card center"><div class="sub">ルームID(タップでコピー)</div><div class="roomid" id="ridv">${h(roomId)}</div></div>
+    <h1>${T('ロビー')}</h1>
+    <div class="card center"><div class="sub">${T('ルームID(タップでコピー)')}</div><div class="roomid" id="ridv">${h(roomId)}</div></div>
     <div class="card">
-      <div class="sub">参加者 ${ps.length}/${MAX_PLAYERS}</div>
-      ${ps.map(([id, p]) => `<div class="pl"><span class="plname">${id === room.admin ? '👑 ' : ''}${h(p.name)}${id === pid ? '<span class="you">あなた</span>' : ''}</span>${isAdmin && id !== pid ? `<button class="mini" data-act="admin" data-id="${h(id)}">管理者にする</button><button class="mini ng" data-act="kick" data-id="${h(id)}">外す</button>` : ''}</div>`).join('')}
+      <div class="sub">${T('参加者')} ${ps.length}/${MAX_PLAYERS}</div>
+      ${ps.map(([id, p]) => `<div class="pl"><span class="plname">${id === room.admin ? '👑 ' : ''}${h(p.name)}${id === pid ? '<span class="you">' + T('あなた') + '</span>' : ''}</span>${isAdmin && id !== pid ? `<button class="mini" data-act="admin" data-id="${h(id)}">${T('管理者にする')}</button><button class="mini ng" data-act="kick" data-id="${h(id)}">${T('外す')}</button>` : ''}</div>`).join('')}
     </div>
     ${settingsCard()}
-    ${!isAdmin ? '<div class="center sub">管理者のスタートを待っています…</div>'
-      : (settings().mode !== 'solo' && ps.length < 2) ? '<button class="btn" id="start" disabled style="opacity:0.45">ゲームスタート</button><div class="center sub">アーケードは2人から遊べます(1人ならソロゲームへ)</div>'
-      : '<button class="btn" id="start">ゲームスタート</button>'}
+    ${!isAdmin ? `<div class="center sub">${T('管理者のスタートを待っています…')}</div>`
+      : (settings().mode !== 'solo' && ps.length < 2) ? `<button class="btn" id="start" disabled style="opacity:0.45">${T('ゲームスタート')}</button><div class="center sub">${T('アーケードは2人から遊べます(1人ならソロゲームへ)')}</div>`
+      : `<button class="btn" id="start">${T('ゲームスタート')}</button>`}
     <button class="btn ghost" id="leave">${leaveLabel()}</button>`);
-  $('#ridv').onclick = () => { if (navigator.clipboard) navigator.clipboard.writeText(roomId).then(() => toast('コピーしました')); };
+  $('#ridv').onclick = () => { if (navigator.clipboard) navigator.clipboard.writeText(roomId).then(() => toast(T('コピーしました'))); };
   $('#leave').onclick = leaveRoom;
   if (isAdmin) $('#start').onclick = startGame;
   document.querySelectorAll('[data-set]').forEach(b => { b.onclick = () => setSetting(b.dataset.set, b.dataset.v); });
@@ -107,8 +107,8 @@ function playerAction(act, id) {
   if (room.admin !== pid || room.phase !== 'lobby' || id === pid || !room.players[id]) return;
   const name = room.players[id].name;
   const ref = db.ref('minigame-rooms/' + roomId);
-  if (act === 'kick') { if (confirm(name + ' をルームから外す?')) ref.child('players/' + id).remove(); }
-  else if (act === 'admin') { if (confirm(name + ' に管理者を渡す?')) ref.child('admin').set(id); }
+  if (act === 'kick') { if (confirm(T('{name} をルームから外す?', { name }))) ref.child('players/' + id).remove(); }
+  else if (act === 'admin') { if (confirm(T('{name} に管理者を渡す?', { name }))) ref.child('admin').set(id); }
 }
 
 function startRound(i, cfg) {
@@ -146,7 +146,7 @@ function buildPlay() {
   const r = room.round, g = gameAt(r.index), c = room.config, m = multAt(r.index);
   roundState = { index: r.index, submitted: false };
   setApp(`
-    <div class="top"><span>${c.mode === 'solo' ? 'ソロゲーム' : 'ラウンド ' + (r.index + 1) + '/' + c.rounds}${m > 1 ? ' ×2' : ''}</span><span>${h(g.title)}</span></div>
+    <div class="top"><span>${c.mode === 'solo' ? T('ソロゲーム') : T('ラウンド') + ' ' + (r.index + 1) + '/' + c.rounds}${m > 1 ? ' ×2' : ''}</span><span>${h(g.title)}</span></div>
     <div id="stage" class="stage"></div>
     <div id="wait" class="center sub"></div>`);
   const mine = getRes(r.index)[pid];
@@ -172,13 +172,13 @@ function submit(v, x) {
     const d = document.createElement('div');
     d.className = 'center';
     d.style.cssText = 'font-size:22px;font-weight:800;color:#ffcc33;margin-top:10px';
-    d.textContent = '👑 新記録! タイトル獲得!';
+    d.textContent = '👑 ' + T('新記録! タイトル獲得!');
     st.appendChild(d);
   });
 }
 function showSubmitted(v, x) {
   const g = gameAt(roundState.index);
-  $('#stage').innerHTML = `<div class="center"><div class="sub">あなたの記録</div><div class="big-num" style="font-size:44px">${h(g.fmt(v, x))}</div>${g.result && x !== undefined ? '<div class="viz" id="rbox"></div>' : (g.viz && x ? g.viz(v, x) : '')}</div>`;
+  $('#stage').innerHTML = `<div class="center"><div class="sub">${T('あなたの記録')}</div><div class="big-num" style="font-size:44px">${h(g.fmt(v, x))}</div>${g.result && x !== undefined ? '<div class="viz" id="rbox"></div>' : (g.viz && x ? g.viz(v, x) : '')}</div>`;
   if (g.result && x !== undefined) callResult(g, $('#rbox'), x, 200);
   updateWaiting();
 }
@@ -187,7 +187,7 @@ function updateWaiting() {
   if (!roundState.submitted) { w.textContent = ''; return; }
   const n = Object.keys(room.players).length;
   const c = Object.keys(getRes(roundState.index)).filter(k => room.players[k]).length;
-  w.textContent = 'みんなを待っています… ' + c + '/' + n;
+  w.textContent = T('みんなを待っています…') + ' ' + c + '/' + n;
 }
 
 /* ---------- 集計 ---------- */
@@ -225,24 +225,24 @@ function renderRoundResult() {
   const gi = room.round.index, g = gameAt(gi), c = room.config;
   const solo = c.mode === 'solo', m = multAt(gi);
   const list = rankGame(gi), st = solo ? [] : standing(gi);
-  const crown = id => isNewTitle(g, id, room.round.startAt) ? '<div class="viz" style="text-align:left;color:#ffcc33;font-weight:800;font-size:14px">👑 新記録! タイトル獲得!</div>' : '';
+  const crown = id => isNewTitle(g, id, room.round.startAt) ? '<div class="viz" style="text-align:left;color:#ffcc33;font-weight:800;font-size:14px">👑 ' + T('新記録! タイトル獲得!') + '</div>' : '';
   const hasRes = p => !!g.result && p.x !== undefined && p.v !== null;
   const isAdmin = room.admin === pid, last = gi >= c.rounds - 1;
-  const title = solo ? g.title : 'ラウンド ' + (gi + 1) + '/' + c.rounds + ' ' + g.title;
+  const title = solo ? g.title : T('ラウンド') + ' ' + (gi + 1) + '/' + c.rounds + ' ' + g.title;
   let actions;
-  if (!isAdmin) actions = '<div class="center sub">管理者の操作を待っています…</div>';
-  else if (solo) actions = '<button class="btn" id="again1">もう一度</button><button class="btn sub" id="tolobby">ロビーに戻る</button>';
-  else actions = `<button class="btn" id="next">${last ? '最終結果へ' : '次のラウンドへ'}</button>`;
+  if (!isAdmin) actions = '<div class="center sub">' + T('管理者の操作を待っています…') + '</div>';
+  else if (solo) actions = '<button class="btn" id="again1">' + T('もう一度') + '</button><button class="btn sub" id="tolobby">' + T('ロビーに戻る') + '</button>';
+  else actions = `<button class="btn" id="next">${last ? T('最終結果へ') : T('次のラウンドへ')}</button>`;
   setApp(`
-    <h1>${h(title)} の結果</h1>
-    ${m > 1 ? `<div class="bonus">${bonusLabel(gi)} ポイント2倍</div>` : ''}
+    <h1>${T('{title} の結果', { title: h(title) })}</h1>
+    ${m > 1 ? `<div class="bonus">${bonusLabel(gi)} ${T('ポイント2倍')}</div>` : ''}
     ${g.resultTop ? '<div class="card center" id="rtop"></div>' : ''}
     <div class="card">
-      ${list.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (あなた)' : ''}</span><span class="val">${p.v === null ? '未提出' : h(g.fmt(p.v, p.x))}</span>${solo ? '' : `<span class="pt">+${p.pts}</span>`}${crown(p.id)}${hasRes(p) ? '<div class="viz" data-rp></div>' : ((g.viz && p.x !== undefined && p.v !== null) ? `<div class="viz">${g.viz(p.v, p.x)}</div>` : '')}</div>`).join('')}
+      ${list.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (' + T('あなた') + ')' : ''}</span><span class="val">${p.v === null ? T('未提出') : h(g.fmt(p.v, p.x))}</span>${solo ? '' : `<span class="pt">+${p.pts}</span>`}${crown(p.id)}${hasRes(p) ? '<div class="viz" data-rp></div>' : ((g.viz && p.x !== undefined && p.v !== null) ? `<div class="viz">${g.viz(p.v, p.x)}</div>` : '')}</div>`).join('')}
     </div>
     ${solo ? '' : `<div class="card">
-      <div class="sub">ここまでの合計</div>
-      ${st.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (あなた)' : ''}</span><span class="tot">${p.total}</span></div>`).join('')}
+      <div class="sub">${T('ここまでの合計')}</div>
+      ${st.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (' + T('あなた') + ')' : ''}</span><span class="tot">${p.total}</span></div>`).join('')}
     </div>`}
     ${actions}`);
   if (g.resultTop) { try { g.resultTop($('#rtop'), room.round); } catch (e) { console.warn(e); } }   // ゲームごとの、結果のいちばん上(お手本など)
@@ -265,13 +265,13 @@ function renderFinal() {
   const winners = st.filter(p => p.rank === 1).map(p => h(p.name)).join(' & ');
   const isAdmin = room.admin === pid;
   setApp(`
-    <h1>最終結果</h1>
-    <div class="win">🏆 優勝: ${winners}</div>
+    <h1>${T('最終結果')}</h1>
+    <div class="win">🏆 ${T('優勝')}: ${winners}</div>
     <div class="card">
-      ${st.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (あなた)' : ''}<div class="detail">${p.pts.map((v, i) => multAt(i) > 1 ? v + '★' : v).join(' / ')}</div></span><span class="tot">${p.total}</span></div>`).join('')}
+      ${st.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (' + T('あなた') + ')' : ''}<div class="detail">${p.pts.map((v, i) => multAt(i) > 1 ? v + '★' : v).join(' / ')}</div></span><span class="tot">${p.total}</span></div>`).join('')}
     </div>
-    ${(c.doubleUp || c.finalUp) ? '<div class="center sub">★ = ポイント2倍のラウンド</div>' : ''}
-    ${isAdmin ? '<button class="btn" id="again">ロビーに戻る(もう一度)</button>' : '<div class="center sub">管理者の操作を待っています…</div>'}
+    ${(c.doubleUp || c.finalUp) ? '<div class="center sub">★ = ' + T('ポイント2倍のラウンド') + '</div>' : ''}
+    ${isAdmin ? '<button class="btn" id="again">' + T('ロビーに戻る(もう一度)') + '</button>' : '<div class="center sub">' + T('管理者の操作を待っています…') + '</div>'}
     <button class="btn ghost" id="leave">${leaveLabel()}</button>`);
   $('#leave').onclick = guarded(leaveRoom);
   if (isAdmin) $('#again').onclick = guarded(toLobby);
