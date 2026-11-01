@@ -135,6 +135,8 @@ const I18N = {
   // --- 共通・ホーム・練習モード(core.js) ---
   '終了!': ['Finish!', '끝!'],
   'タイトルホルダー': ['Title holder', '타이틀 홀더'],
+  'タイトルホルダー一覧': ['Title holders', '타이틀 홀더 목록'],
+  'ゲームごとの、これまででいちばん良い記録です(アーケード・2人以上で遊んだ記録だけ)': ['The best record so far in each game (only from Arcade games with 2+ players)', '게임별 지금까지의 최고 기록이에요 (아케이드·2명 이상으로 한 기록만)'],
   'ここではタイトルは取れません(アーケード・2人以上のときだけ)': ['No title can be won here (Arcade with 2+ players only)', '여기서는 타이틀을 얻을 수 없어요 (아케이드·2명 이상일 때만)'],
   'まだいない! 最初の記録を出そう': ['Nobody yet! Set the first record', '아직 없어요! 첫 기록을 세워 보세요'],
   '読み込みエラー': ['Loading error', '불러오기 오류'],

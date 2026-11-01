@@ -140,6 +140,7 @@ function init() {
   db.ref(RECORD_PATH).on('value', s => {
     records = s.val() || {};
     if (room && room.phase === 'roundResult' && viewKey === 'roundResult') renderRoundResult();   // 新記録の印を出し直す
+    if (!room && $('#titles')) $('#titles').innerHTML = titlesListHtml();   // タイトルホルダー一覧を見ているときは、その場で新しくする
   }, () => {});
 
   // 見えない匿名ログイン。ログインのID(uid)を、そのままプレイヤーのID(pid)にする。
@@ -187,6 +188,7 @@ function renderHome(msg) {
     </div>
     <div class="card">
       <button class="btn sub" id="practice">${T('練習モード(1人で遊ぶ)')}</button>
+      <button class="btn sub" id="titlesBtn">👑 ${T('タイトルホルダー一覧')}</button>
     </div>
     <div class="msg" id="msg">${h(msg || '')}</div>
     <p class="center" style="font-size:13px;margin:4px 0"><a href="${sitePath('/')}" style="color:#9aa3c7">${T("Muddy's Games トップ")}</a> ・ <a href="${sitePath('/privacy.html')}" style="color:#9aa3c7">${T('プライバシーポリシー')}</a></p>`);
@@ -195,6 +197,31 @@ function renderHome(msg) {
   $('#create').onclick = createRoom;
   $('#join').onclick = joinRoom;
   $('#practice').onclick = renderPractice;
+  $('#titlesBtn').onclick = renderTitles;
+}
+
+/* ---------- タイトルホルダー一覧(ホームから見る。全ゲームの最高記録) ---------- */
+function titlesListHtml() {
+  return GAMES.map(g => {
+    const r = records[g.id], has = r && typeof r.v === 'number';
+    let date = '';
+    if (has && r.at) { try { date = new Date(r.at).toLocaleDateString(LANG); } catch (e) { } }
+    return `<div class="rk" style="flex-direction:column;align-items:stretch;gap:2px">
+      <div style="font-weight:700">${h(g.title)}</div>
+      ${has
+        ? `<div style="display:flex;gap:8px;align-items:baseline"><span class="nm" style="color:#ffcc33">👑 ${h(r.name || '???')}</span><span class="val">${h(recText(g, r))}</span></div>${date ? `<div class="detail">${h(date)}</div>` : ''}`
+        : `<div class="sub">${T('まだいない! 最初の記録を出そう')}</div>`}
+    </div>`;
+  }).join('');
+}
+function renderTitles() {
+  clearTimers();
+  setApp(`
+    <h1>👑 ${T('タイトルホルダー一覧')}</h1>
+    <div class="sub" style="margin:-4px 0 10px">${T('ゲームごとの、これまででいちばん良い記録です(アーケード・2人以上で遊んだ記録だけ)')}</div>
+    <div class="card" id="titles" style="gap:8px">${titlesListHtml()}</div>
+    <button class="btn ghost" id="back" style="margin-top:12px">${T('ホームに戻る')}</button>`);
+  $('#back').onclick = () => renderHome();
 }
 
 /* ---------- ゲーム選択(ドラムロール) ----------
