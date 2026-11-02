@@ -94,7 +94,7 @@ function renderLobby() {
       : `<button class="btn" id="start">${T('ゲームスタート')}</button>`}
     <button class="btn ghost" id="leave">${leaveLabel()}</button>`);
   $('#ridv').onclick = () => { if (navigator.clipboard) navigator.clipboard.writeText(roomId).then(() => toast(T('コピーしました'))); };
-  $('#leave').onclick = leaveRoom;
+  $('#leave').onclick = () => leaveRoom();
   if (isAdmin) $('#start').onclick = startGame;
   document.querySelectorAll('[data-set]').forEach(b => { b.onclick = () => setSetting(b.dataset.set, b.dataset.v); });
   if ($('#sp')) pickerInit('sp', id => setSetting('soloGame', id));

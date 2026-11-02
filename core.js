@@ -25,7 +25,14 @@ const COUNTDOWN_MS = 5000;
 const $ = s => document.querySelector(s);
 const $app = document.getElementById('app');
 const h = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const setApp = html => { $app.innerHTML = html; };
+const setApp = html => { $app.innerHTML = html; guardBack(); };
+/* 戻るボタンの確認(backguard.js)。ルームの中: 対戦中は「ゲームをやめますか？」、それ以外は「ルームから出ますか？」(どちらも、はいでルームを出る)。
+   ルームの外は「ホームに戻りますか？」。練習のゲーム中は startPractice で「ゲームをやめますか？」にする */
+function guardBack() {
+  if (!window.BackGuard) return;
+  if (roomId && room) BackGuard.set(room.phase === 'playing' ? 'game' : 'room', () => leaveRoom(true));
+  else BackGuard.set('home');
+}
 
 let db = null, offset = 0, pid = '', myName = '';
 let roomId = null, room = null, roomRef = null, roomCb = null, adminTimer = null;
@@ -293,6 +300,7 @@ function startPractice(id) {
     <button class="btn ghost" id="quit">${T('やめる')}</button>`);
   let done = false;
   $('#quit').onclick = () => { done = true; clearTimers(); renderPractice(); };
+  if (window.BackGuard) BackGuard.set('game', () => $('#quit') && $('#quit').onclick());
   practiceSel = id;
   const stage = $('#stage');
   g.play(stage, round, withEndShow(stage, (v, x) => { if (done) return; done = true; clearTimers(); practiceResult(g, v, x); }));
@@ -395,14 +403,14 @@ function leaveLocal(msg) {
   renderHome(msg || '');
 }
 
-function leaveRoom() {
+function leaveRoom(sure) {   // sure: 戻るボタンで、もう確認したとき
   const isAdmin = room.admin === pid;
   const others = Object.entries(room.players).filter(([id]) => id !== pid)
     .sort((a, b) => (a[1].joinedAt || 0) - (b[1].joinedAt || 0));
   const msg = !isAdmin ? T('ルームから出る?')
     : others.length ? T('ルームから出る?({name} が新しい管理者になります)', { name: others[0][1].name })
     : T('ルームを解散する?');
-  if (!confirm(msg)) return;
+  if (!sure && !confirm(msg)) return;
   const ref = db.ref('minigame-rooms/' + roomId), me = pid;
   leaveLocal('');
   if (!isAdmin) ref.child('players/' + me).remove();
