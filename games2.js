@@ -1,5 +1,5 @@
 /* ミニゲーム本体(games2.js): マディーズバーガーを作ろう! / ジャックを注げ! / 俺のハンバーグを焼け! /
-   だるまさんがころんだ! / 南インド風カレーを作ろう!
+   だるまさんがころんだ! / 南インド風カレーを作ろう! / キレイに書けるかな? / 数字を駆け抜けろ!
    games.js の後、core.js の前に読み込むこと。 */
 
 GAMES.push(
@@ -2180,4 +2180,393 @@ function drawKanaResult(el, data, size) {
     d.innerHTML = names.map(([n, mx], i) => `<div>${T(n)} <b style="color:#f2f4ff">${Math.round(sc[i] || 0)}</b>/${mx}</div>`).join('');
     el.appendChild(d);
   }
+}
+
+/* ============================================================
+   ミニゲーム16: 数字を駆け抜けろ!(id: keisan)
+   上に計算式、下に指で答えを書く。指を離して0.6秒で自動判定。15秒で何問解けるか
+   ============================================================ */
+GAMES.push({
+  id: 'keisan', title: '数字を駆け抜けろ!',
+  desc: '上に出る計算の答えを、下のマスに指で書こう!<br>指を離すと自動で判定。正解でも✕でも、すぐ次の問題へ。<br>読めないときは「?」が出るので、書き直してね。「取り消す」で書いた字を消せる。<br>15秒で何問解けるか!',
+  lowerBetter: false, miss: 0,
+  isMiss: v => v < 1,
+  fmt: (v, x) => T('{n}問正解', { n: Math.floor(v) }) + (x && typeof x.w === 'number' ? T('(✕{n})', { n: x.w }) : ''),
+  play: playKeisan
+});
+
+const keisanCfg = {
+  DUR: 15,        // 制限時間(秒)
+  WAIT: 0.6,      // 指を離してから判定するまで(秒)
+  MARK: 0.45,     // ○✕?を出している時間(秒)
+  N: 80,          // 用意する問題の数(15秒では解ききれない数)
+  SMALL: 2 / 3    // 1けたと1けたの問題の割合
+};
+
+// 問題を作る。答えは0〜99、式の数は「2けたと1けた」まで。種が同じなら全員同じ
+function keisanMake(seed) {
+  const rnd = seededRng(seed), ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+  const qs = [];
+  while (qs.length < keisanCfg.N) {
+    const op = ri(0, 3), small = rnd() < keisanCfg.SMALL;   // small = 1けたと1けたの問題
+    let a, b, ans;
+    if (op === 0) {                                   // 足し算(答え99まで)
+      if (small) { a = ri(2, 9); b = ri(2, 9); }
+      else { a = ri(10, 89); b = ri(2, 9); if (rnd() < 0.5) [a, b] = [b, a]; }
+      ans = a + b;
+    } else if (op === 1) {                            // 引き算(マイナスにならない)
+      if (small) { a = ri(3, 9); b = ri(1, a - 1); }
+      else { a = ri(11, 99); b = ri(2, 9); }
+      ans = a - b;
+    } else if (op === 2) {                            // かけ算(答え99まで)
+      if (small) { a = ri(2, 9); b = ri(2, 9); }
+      else { b = ri(2, 9); a = ri(10, Math.floor(99 / b)); if (rnd() < 0.5) [a, b] = [b, a]; }
+      ans = a * b;
+    } else {                                          // わり算(わり切れる。わる数2〜9)
+      b = ri(2, 9);
+      ans = small ? ri(2, 9) : ri(10, Math.floor(99 / b));   // small = 九九の逆(答えも1けた)
+      a = ans * b;
+      if (a > 99) continue;
+    }
+    if (ans < 0 || ans > 99) continue;
+    const prev = qs[qs.length - 1];
+    if (prev && prev.a === a && prev.b === b && prev.op === op) continue;   // 同じ問題が続かない
+    qs.push({ a, b, op, ans });
+  }
+  return qs;
+}
+const KEISAN_OPS = ['+', '−', '×', '÷'];
+const keisanText = q => `${q.a} ${KEISAN_OPS[q.op]} ${q.b}`;
+
+// 手書きの数字(0〜9)を読む。$P(点の集まりでくらべる)方式。書き順・向き・画数がちがっても読める
+// お手本は 0〜100 の座標。同じ数字に書き方の種類をいくつか持つ
+const DIGIT_TPL = {
+  0: [[[50, 0, 22, 12, 8, 50, 22, 88, 50, 100, 78, 88, 92, 50, 78, 12, 50, 0]],
+      [[50, 0, 34, 12, 28, 50, 34, 88, 50, 100, 66, 88, 72, 50, 66, 12, 50, 0]]],   // 細長い0
+  1: [[[50, 0, 50, 100]], [[30, 22, 50, 0, 50, 100]], [[30, 22, 50, 0, 50, 100]], [[30, 18, 50, 0, 50, 100], [30, 100, 70, 100]]],
+  2: [[[15, 25, 30, 4, 55, 0, 78, 10, 82, 32, 65, 55, 15, 100, 88, 100]],
+      [[18, 20, 40, 0, 70, 2, 80, 25, 15, 100, 88, 100]]],
+  3: [[[18, 12, 45, 0, 72, 8, 75, 30, 48, 48, 78, 60, 82, 85, 55, 100, 18, 92]],
+      [[18, 5, 78, 5, 45, 45, 78, 60, 82, 85, 55, 100, 18, 92]]],
+  4: [[[62, 0, 8, 68, 92, 68], [68, 30, 68, 100]],
+      [[30, 0, 15, 62, 90, 62], [68, 15, 68, 100]],
+      [[30, 0, 15, 62, 90, 62, 68, 62], [68, 15, 68, 100]],
+      [[68, 100, 68, 0, 8, 68, 92, 68]]],
+  5: [[[78, 0, 28, 0], [28, 0, 22, 45, 50, 36, 78, 52, 80, 80, 55, 100, 18, 92]],
+      [[25, 0, 22, 45, 50, 36, 78, 52, 80, 80, 55, 100, 18, 92], [25, 0, 78, 0]],
+      [[78, 0, 28, 0, 22, 45, 50, 36, 78, 52, 80, 80, 55, 100, 18, 92]]],
+  6: [[[70, 0, 38, 22, 22, 60, 28, 92, 55, 100, 78, 82, 72, 56, 45, 50, 24, 68]],
+      [[62, 0, 25, 55, 28, 90, 55, 100, 78, 80, 70, 55, 42, 52, 26, 70]]],
+  7: [[[10, 0, 90, 0, 42, 100]], [[10, 18, 10, 0, 90, 0, 42, 100]], [[10, 0, 90, 0, 42, 100], [40, 52, 82, 52]],
+      [[10, 0, 90, 0, 62, 50, 52, 100]]],
+  8: [[[72, 12, 50, 0, 26, 12, 28, 36, 72, 62, 76, 88, 50, 100, 24, 88, 28, 62, 72, 36, 74, 12]],
+      [[50, 46, 24, 30, 30, 6, 50, 0, 70, 6, 76, 30, 50, 46, 22, 66, 26, 92, 50, 100, 74, 92, 78, 66, 50, 46]]],
+  9: [[[76, 22, 62, 2, 36, 2, 22, 22, 32, 44, 58, 46, 76, 28], [76, 10, 74, 100]],
+      [[76, 22, 62, 2, 36, 2, 22, 22, 32, 44, 58, 46, 76, 28, 74, 100]],
+      [[76, 22, 62, 2, 36, 2, 22, 22, 32, 44, 58, 46, 76, 28, 70, 70, 50, 100, 30, 96]]]
+};
+const DIGIT_N = 40;          // くらべるときの点の数
+const DIGIT_MAX = 0.62;      // これより遠い(ちがう)と「?」(1点あたりの平均の距離)
+const DIGIT_GAP = 1.08;      // 2番目に近い数字との差がこれ未満だと「?」(2番目÷1番目)
+const DIGIT_ACCEPT = 1.15;   // 正しい答えの数字が、いちばん近い数字のこれ倍以内なら、○にする(答えを知っている前提で読む)
+const DIGIT_LEARN = 6;       // 覚えるその人の字(数字ごと、新しいものから)
+const DIGIT_MIX = 0.5;       // 縦横同じ倍率でくらべる割合(のこりは、縦横それぞれのばしてくらべる)
+const DIGIT_THIN = 0.22;     // 幅(か高さ)がこれ未満の細い線は、のばさない(「1」が細いままになるように)
+const DIGIT_ONE_LEN = 1.6;   // 「1」とみなす線の長さの上限(高さの何倍)
+
+// 線の集まり → 点 N 個(全部の線をつなげた長さで、等間隔に)
+function digitCloud(strokes, stretch) {
+  const segs = [];
+  let L = 0;
+  strokes.forEach((s, si) => { for (let i = 1; i < s.length; i++) { const d = Math.hypot(s[i][0] - s[i - 1][0], s[i][1] - s[i - 1][1]); segs.push([s[i - 1], s[i], d]); L += d; } });
+  const pts = [];
+  if (L <= 0) {   // 点だけ
+    const p = strokes[0][0];
+    for (let i = 0; i < DIGIT_N; i++) pts.push([p[0], p[1]]);
+  } else {
+    const step = L / (DIGIT_N - 1);
+    let acc = 0, need = 0;
+    for (const [a, b, d] of segs) {
+      while (need <= acc + d + 1e-9 && pts.length < DIGIT_N) {
+        const t = d ? (need - acc) / d : 0;
+        pts.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+        need += step;
+      }
+      acc += d;
+    }
+    const last = segs[segs.length - 1][1];
+    while (pts.length < DIGIT_N) pts.push([last[0], last[1]]);
+  }
+  // 大きさをそろえる。ふつうは縦横それぞれ 0〜1 にのばす(細長く書いた 9 なども読めるように)。
+  // とても細いもの(「1」など、幅が高さの DIGIT_THIN 未満)は、縦横同じ倍率のまま(細いまま)
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  pts.forEach(([x, y]) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); });
+  const w = x1 - x0, h = y1 - y0, big = Math.max(w, h) || 1;
+  const thin = !stretch || Math.min(w, h) < big * DIGIT_THIN;
+  const sx = thin ? big : (w || 1), sy = thin ? big : (h || 1);
+  let cx = 0, cy = 0;
+  pts.forEach(p => { p[0] = (p[0] - x0) / sx; p[1] = (p[1] - y0) / sy; cx += p[0]; cy += p[1]; });
+  cx /= pts.length; cy /= pts.length;
+  pts.forEach(p => { p[0] -= cx; p[1] -= cy; });
+  return pts;
+}
+
+// $P のくらべ方(近い点どうしを1対1で組む。始める点を変えて何回か)
+function digitCloudDist(a, b) {
+  const n = a.length, step = Math.max(1, Math.floor(Math.sqrt(n)));
+  const one = (p, q, st) => {
+    const used = new Array(n).fill(false);
+    let sum = 0, i = st;
+    do {
+      let best = Infinity, bj = -1;
+      for (let j = 0; j < n; j++) if (!used[j]) { const d = Math.hypot(p[i][0] - q[j][0], p[i][1] - q[j][1]); if (d < best) { best = d; bj = j; } }
+      used[bj] = true;
+      const w = 1 - ((i - st + n) % n) / n;
+      sum += w * best;
+      i = (i + 1) % n;
+    } while (i !== st);
+    return sum;
+  };
+  let m = Infinity;
+  for (let st = 0; st < n; st += step) m = Math.min(m, one(a, b, st), one(b, a, st));
+  return m / (n / 2);   // 1点あたりのおおよその平均距離
+}
+
+let DIGIT_CLOUDS = null;
+function digitClouds() {
+  if (DIGIT_CLOUDS) return DIGIT_CLOUDS;
+  DIGIT_CLOUDS = [];
+  Object.keys(DIGIT_TPL).forEach(d => DIGIT_TPL[d].forEach(t => {
+    const strokes = t.map(f => { const s = []; for (let i = 0; i < f.length; i += 2) s.push([f[i], f[i + 1]]); return s; });
+    DIGIT_CLOUDS.push({ d: +d, u: digitCloud(strokes, false), s: digitCloud(strokes, true) });
+  }));
+  digitUserLoad().forEach(u => DIGIT_CLOUDS.push(digitUserCloud(u)));
+  return DIGIT_CLOUDS;
+}
+
+// その人の字を覚える(このスマホの localStorage。○になった字だけ)。{ d, s: [[x,y,x,y…](0〜100)…] }
+const DIGIT_KEY = 'muddys-digits';
+function digitUserLoad() {
+  try { const a = JSON.parse(localStorage.getItem(DIGIT_KEY) || '[]'); return Array.isArray(a) ? a.filter(u => u && u.d >= 0 && u.d <= 9 && Array.isArray(u.s)) : []; }
+  catch (e) { return []; }
+}
+function digitUserCloud(u) {
+  const strokes = u.s.map(f => { const s = []; for (let i = 0; i + 1 < f.length; i += 2) s.push([f[i], f[i + 1]]); return s; }).filter(s => s.length);
+  return { d: u.d, user: true, u: digitCloud(strokes, false), s: digitCloud(strokes, true) };
+}
+function digitLearn(d, strokes) {
+  if (!strokes.length) return;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  strokes.forEach(st => st.forEach(([x, y]) => { x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y); }));
+  const sc = Math.max(x1 - x0, y1 - y0) || 1;
+  const s = strokes.map(st => {
+    const step = Math.max(1, Math.ceil(st.length / 24)), f = [];
+    for (let i = 0; i < st.length; i += step) f.push(Math.round((st[i][0] - x0) / sc * 100), Math.round((st[i][1] - y0) / sc * 100));
+    const l = st[st.length - 1]; f.push(Math.round((l[0] - x0) / sc * 100), Math.round((l[1] - y0) / sc * 100));
+    return f;
+  });
+  const all = digitUserLoad();
+  all.push({ d, s });
+  const keep = [];                                  // 数字ごとに新しい DIGIT_LEARN 個まで
+  for (let i = all.length - 1; i >= 0; i--) if (keep.filter(u => u.d === all[i].d).length < DIGIT_LEARN) keep.unshift(all[i]);
+  try { localStorage.setItem(DIGIT_KEY, JSON.stringify(keep)); } catch (e) { }
+  DIGIT_CLOUDS = null;                              // 次に読むときに作り直す
+}
+
+// 1つの数字を読む → { d: 数字 or null(自信なし), best, second }
+function digitRead(strokes) {
+  // 縦横同じ倍率でくらべた距離と、縦横それぞれのばしてくらべた距離をまぜる(細長く書いた数字にも強くする)
+  const cu = digitCloud(strokes, false), cs = digitCloud(strokes, true);
+  const best = {};
+  digitClouds().forEach(t => {
+    const v = DIGIT_MIX * digitCloudDist(cu, t.u) + (1 - DIGIT_MIX) * digitCloudDist(cs, t.s);
+    if (!(t.d in best) || v < best[t.d]) best[t.d] = v;
+  });
+  // 「1」はほぼまっすぐな線。線の長さが高さの DIGIT_ONE_LEN 倍より長い(曲がっている・何本もある)なら「1」ではない
+  let len = 0, y0 = Infinity, y1 = -Infinity;
+  strokes.forEach(st => st.forEach((p, i) => { y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]); if (i) len += Math.hypot(p[0] - st[i - 1][0], p[1] - st[i - 1][1]); }));
+  if (len > (y1 - y0) * DIGIT_ONE_LEN) delete best[1];
+  const r = Object.keys(best).map(d => [+d, best[d]]).sort((a, b) => a[1] - b[1]);
+  const [d1, v1] = r[0], v2 = r[1][1];
+  const ok = v1 <= DIGIT_MAX && v2 / Math.max(1e-6, v1) >= DIGIT_GAP;
+  return { d: ok ? d1 : null, guess: d1, v1, v2, rank: r };
+}
+
+// 線を、左右にはなれたかたまり(数字1つずつ)に分ける。slack=重なりとみなすすき間(座標と同じ単位)
+function digitSplit(strokes, slack) {
+  const box = s => { let a = Infinity, b = -Infinity; s.forEach(p => { a = Math.min(a, p[0]); b = Math.max(b, p[0]); }); return [a, b]; };
+  const g = strokes.filter(s => s.length).map(s => ({ s: [s], r: box(s) })).sort((a, b) => a.r[0] - b.r[0]);
+  let merged = true;
+  while (merged) {
+    merged = false;
+    for (let i = 0; i < g.length && !merged; i++) for (let j = i + 1; j < g.length && !merged; j++) {
+      const A = g[i].r, B = g[j].r;
+      if (A[0] <= B[1] + slack && B[0] <= A[1] + slack) {
+        g[i] = { s: g[i].s.concat(g[j].s), r: [Math.min(A[0], B[0]), Math.max(A[1], B[1])] };
+        g.splice(j, 1); merged = true;
+      }
+    }
+  }
+  return g.sort((a, b) => a.r[0] - b.r[0]).map(x => x.s);
+}
+
+// 書いた線 → 数(0〜99)。読めないときは null
+function digitReadNumber(strokes, slack) {
+  const parts = digitSplit(strokes, slack);
+  if (!parts.length || parts.length > 2) return { n: null, parts };
+  const rs = parts.map(digitRead);
+  if (rs.some(r => r.d === null)) return { n: null, parts, rs };
+  return { n: rs.reduce((a, r) => a * 10 + r.d, 0), parts, rs };
+}
+
+// 答え ans(0〜99)として読めるか。けた数が合っていて、どのけたも「正しい数字がいちばん近い数字の DIGIT_ACCEPT 倍以内」なら○
+function digitMatch(parts, ans) {
+  const want = String(ans).split('').map(Number);
+  if (parts.length !== want.length) return false;
+  return parts.every((p, i) => {
+    const r = digitRead(p), hit = r.rank.find(x => x[0] === want[i]);
+    return hit && hit[1] <= DIGIT_MAX && hit[1] <= r.v1 * DIGIT_ACCEPT;
+  });
+}
+
+function playKeisan(stage, round, submit) {
+  const game = GAMES.find(g => g.id === 'keisan');
+  const C = keisanCfg;
+  const qs = keisanMake(Math.round((round.delay || 3000) * 1000));
+
+  countdown(stage, game, round, () => {
+    stage.innerHTML =
+      `<div class="center sub" style="font-size:15px;margin:2px 0">○ <b id="okn" style="color:#35d07f;font-size:18px">0</b> ・ ✕ <b id="ngn" style="color:#ff5c6c;font-size:18px">0</b> ・ ${T('残り {t} 秒', { t: `<b id="left">${C.DUR.toFixed(1)}</b>` })}</div>` +
+      `<div style="position:relative;height:24vh;min-height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center">` +
+      `<div id="q" style="font-size:clamp(40px,13vw,64px);font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap"></div>` +
+      `<div id="prev" class="sub" style="min-height:20px;font-size:15px;font-variant-numeric:tabular-nums"></div>` +
+      `<div id="mark" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:120px;font-weight:800;pointer-events:none;opacity:0"></div></div>` +
+      `<canvas id="pad" style="display:block;width:100%;height:42vh;touch-action:none;border-radius:14px"></canvas>` +
+      `<button class="btn ghost" id="clr" style="margin-top:10px">${T('取り消す')}</button>`;
+
+    const qEl = stage.querySelector('#q'), prevEl = stage.querySelector('#prev'), markEl = stage.querySelector('#mark');
+    const okEl = stage.querySelector('#okn'), ngEl = stage.querySelector('#ngn'), leftEl = stage.querySelector('#left');
+    const cv = stage.querySelector('#pad');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = cv.getBoundingClientRect();
+    const W = rect.width, H = rect.height;
+    cv.width = W * dpr; cv.height = H * dpr;
+    const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+    const PEN = Math.max(6, Math.min(W, H) * 0.035);
+
+    let qi = 0, ok = 0, ng = 0, done = false, pid = null, cur = null, judgeT = null, markT = null;
+    const strokes = [];
+
+    const draw = () => {
+      ctx.clearRect(0, 0, W, H);
+      ctx.fillStyle = '#f4f1e8'; ctx.fillRect(0, 0, W, H);                 // ノートの紙
+      ctx.strokeStyle = 'rgba(29,32,51,0.15)'; ctx.lineWidth = 2; ctx.setLineDash([8, 8]);
+      ctx.beginPath(); ctx.moveTo(W / 2, H * 0.12); ctx.lineTo(W / 2, H * 0.88); ctx.stroke();   // 2けたの目安
+      ctx.setLineDash([]);
+      if (!strokes.length) {
+        ctx.fillStyle = 'rgba(29,32,51,0.3)'; ctx.font = 'bold 16px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText(T('ここに答えを書こう'), W / 2, H - 10);
+      }
+      ctx.strokeStyle = '#1d2033'; ctx.lineWidth = PEN; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      strokes.forEach(s => {
+        ctx.beginPath(); ctx.moveTo(s[0][0], s[0][1]);
+        if (s.length === 1) ctx.lineTo(s[0][0] + 0.1, s[0][1]);
+        s.forEach(p => ctx.lineTo(p[0], p[1]));
+        ctx.stroke();
+      });
+    };
+    const showQ = () => { qEl.innerHTML = `${keisanText(qs[qi])} = <span style="color:#ffcc33">?</span>`; };
+    const showMark = (m, color) => {
+      markEl.textContent = m; markEl.style.color = color;
+      markEl.style.transition = 'none'; markEl.style.opacity = '0.9';
+      clearTimeout(markT);
+      markT = setTimeout(() => { markEl.style.transition = 'opacity .25s'; markEl.style.opacity = '0'; }, C.MARK * 1000);
+      timers.push(markT);
+    };
+
+    // 判定: 読めない → ?(書き直し)/ 読めた → ○か✕で次の問題へ
+    // quick=true: 指を離したすぐあと。正しい答えに読めたときだけ○にする(待たない)。それ以外は0.6秒待って本判定
+    const judge = quick => {
+      judgeT = null;
+      if (done || pid !== null || !strokes.length) return false;
+      const use = strokes.filter(s => {
+        let len = 0; for (let i = 1; i < s.length; i++) len += Math.hypot(s[i][0] - s[i - 1][0], s[i][1] - s[i - 1][1]);
+        return len >= 4;
+      });
+      if (!use.length) { if (!quick) { strokes.length = 0; draw(); } return false; }
+      const q = qs[qi], slack = Math.max(4, W * 0.015);
+      const parts = digitSplit(use, slack);
+      let n;
+      if (digitMatch(parts, q.ans)) {
+        n = q.ans;
+        parts.forEach((p, i) => digitLearn(+String(q.ans)[i], p));    // ○の字は覚える
+      } else {
+        if (quick) return false;
+        n = digitReadNumber(use, slack).n;
+      }
+      strokes.length = 0;
+      if (n === null) { showMark('?', '#ffcc33'); draw(); return true; }
+      if (n === q.ans) { ok++; showMark('○', '#35d07f'); prevEl.innerHTML = `${keisanText(q)} = ${n} <span style="color:#35d07f">○</span>`; }
+      else { ng++; showMark('✕', '#ff5c6c'); prevEl.innerHTML = `${keisanText(q)} = ${n} <span style="color:#ff5c6c">✕</span>(${q.ans})`; }
+      okEl.textContent = ok; ngEl.textContent = ng;
+      qi = Math.min(qi + 1, qs.length - 1);
+      showQ(); draw();
+      return true;
+    };
+
+    const pt = ev => { const b = cv.getBoundingClientRect(); return [ev.clientX - b.left, ev.clientY - b.top]; };
+    cv.addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      if (done || pid !== null) return;
+      if (judgeT) { clearTimeout(judgeT); judgeT = null; }               // 書き足している間は判定しない
+      pid = ev.pointerId;
+      try { cv.setPointerCapture(pid); } catch (e) { }
+      cur = [pt(ev)]; strokes.push(cur); draw();
+    });
+    cv.addEventListener('pointermove', ev => {
+      if (done || ev.pointerId !== pid || !cur) return;
+      ev.preventDefault();
+      const evs = ev.getCoalescedEvents ? ev.getCoalescedEvents() : [ev];
+      (evs.length ? evs : [ev]).forEach(e2 => {
+        const p = pt(e2), l = cur[cur.length - 1];
+        if (Math.hypot(p[0] - l[0], p[1] - l[1]) > 1.5) cur.push(p);
+      });
+      draw();
+    });
+    const up = ev => {
+      if (ev.pointerId !== pid) return;
+      pid = null; cur = null; draw();
+      if (done || judge(true)) return;                                      // 正解ならすぐ○
+      judgeT = setTimeout(() => judge(false), C.WAIT * 1000); timers.push(judgeT);
+    };
+    cv.addEventListener('pointerup', up);
+    cv.addEventListener('pointercancel', up);
+    stage.querySelector('#clr').addEventListener('pointerdown', ev => {
+      ev.preventDefault();
+      if (done || pid !== null) return;
+      if (judgeT) { clearTimeout(judgeT); judgeT = null; }
+      strokes.length = 0; draw();
+    });
+
+    const finish = () => {
+      if (done) return;
+      done = true;
+      if (judgeT) { clearTimeout(judgeT); judgeT = null; }
+      stage.querySelector('#clr').style.opacity = '0.4';
+      // 正解数 + 同点用の小数(まちがいが少ないほど大きい)。0問は失敗(0)
+      const v = ok > 0 ? ok + Math.max(0, 99 - ng) / 100 * 0.9 : 0;
+      submit(Math.round(v * 1000) / 1000, { c: ok, w: ng });
+    };
+
+    showQ(); draw();
+    const t0 = performance.now();
+    const iv = setInterval(() => {
+      if (done) return;
+      const e = (performance.now() - t0) / 1000;
+      leftEl.textContent = Math.max(0, C.DUR - e).toFixed(1);
+      if (e >= C.DUR) finish();
+    }, 50);
+    timers.push(iv);
+  });
 }

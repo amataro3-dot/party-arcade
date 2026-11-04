@@ -124,6 +124,10 @@ const I18N_GAMES = {
     en: { title: 'Make a South Indian Curry!', desc: 'Memorize the spices going into the pot, in order!<br>Then tap them on the shelf in the same order to make the same curry.<br>Right spice in the right place = 2 pts; in the curry but wrong place = 1 pt.<br>The same spice may go in twice!' },
     ko: { title: '남인도 카레를 만들어라!', desc: '냄비에 들어가는 향신료를 순서대로 외우세요!<br>그다음 선반에서 들어간 순서대로 탭해서 같은 카레를 만들어요.<br>향신료와 순서가 모두 맞으면 2점, 들어있지만 순서가 다르면 1점.<br>같은 향신료가 2번 들어갈 때도 있어요!' }
   },
+  keisan: {
+    en: { title: 'Race Through the Numbers!', desc: 'Write the answer to the problem on top in the box below with your finger!<br>When you lift your finger, it’s checked automatically. Right or ✕, the next problem comes right away.<br>If it can’t read your writing, a “?” appears, so write it again. “Clear” erases what you wrote.<br>How many can you solve in 15 seconds?' },
+    ko: { title: '숫자를 달려라!', desc: '위에 나오는 계산의 답을 아래 칸에 손가락으로 써요!<br>손가락을 떼면 자동으로 판정. 정답이든 ✕든 바로 다음 문제로.<br>읽을 수 없으면 「?」가 나오니 다시 써요. 「지우기」로 쓴 글자를 지울 수 있어요.<br>15초 동안 몇 문제 풀 수 있을까!' }
+  },
   kana: {
     en: { title: 'Write in Japanese!', desc: 'Try writing Japanese! Copy the hiragana / katakana model neatly in the notebook square.<br>Write one stroke at a time with your finger. Use “Undo stroke” or “Clear” to redo, then tap “OK”.<br>Scored out of 100 on shape, size, position, stroke count, stroke order and smoothness. 15 sec.' },
     ko: { title: '일본 글자에 도전!', desc: '일본 글자에 도전! 견본의 히라가나·가타카나를 노트 칸에 예쁘게 써 보세요.<br>손가락으로 한 획씩 써요. 「한 획 지우기」「모두 지우기」로 다시 쓰기 OK. 다 쓰면 「결정」.<br>모양·크기·위치·획수·획순·매끄러움으로 100점 만점. 15초.' }
@@ -227,6 +231,11 @@ const I18N = {
   'お題': ['Target', '목표'],
   '{n}秒': ['{n} sec', '{n}초'],
   '{n}点': ['{n} pts', '{n}점'],
+  // --- 数字を駆け抜けろ! ---
+  '{n}問正解': ['{n} correct', '{n}문제 정답'],
+  '(✕{n})': [' (✕{n})', ' (✕{n})'],
+  '取り消す': ['Clear', '지우기'],
+  'ここに答えを書こう': ['Write your answer here', '여기에 답을 써요'],
   '残り {t} 秒': ['{t} sec left', '남은 시간 {t}초'],
   '時間切れ': ['Time’s up', '시간 초과'],
   '時間切れ!': ['Time’s up!', '시간 초과!'],
