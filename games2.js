@@ -2200,7 +2200,8 @@ const keisanCfg = {
   WAIT: 0.6,      // 指を離してから判定するまで(秒)
   MARK: 0.45,     // ○✕?を出している時間(秒)
   N: 80,          // 用意する問題の数(15秒では解ききれない数)
-  SMALL: 2 / 3    // 1けたと1けたの問題の割合
+  SMALL: 2 / 3,   // 1けたと1けたの問題の割合
+  OPS: [0.45, 0.30, 0.15, 0.10]   // 足し算・引き算・かけ算・わり算の割合
 };
 
 // 問題を作る。答えは0〜99、式の数は「2けたと1けた」まで。種が同じなら全員同じ
@@ -2208,7 +2209,9 @@ function keisanMake(seed) {
   const rnd = seededRng(seed), ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
   const qs = [];
   while (qs.length < keisanCfg.N) {
-    const op = ri(0, 3), small = rnd() < keisanCfg.SMALL;   // small = 1けたと1けたの問題
+    const u = rnd(), w = keisanCfg.OPS;                       // 割合で、足し算・引き算・かけ算・わり算を選ぶ
+    const op = u < w[0] ? 0 : u < w[0] + w[1] ? 1 : u < w[0] + w[1] + w[2] ? 2 : 3;
+    const small = rnd() < keisanCfg.SMALL;                    // small = 1けたと1けたの問題
     let a, b, ans;
     if (op === 0) {                                   // 足し算(答え99まで)
       if (small) { a = ri(2, 9); b = ri(2, 9); }
