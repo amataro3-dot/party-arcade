@@ -437,7 +437,7 @@ function gameImg(name) {
   return im.complete && im.naturalWidth ? im : null;
 }
 // 先に読みこんでおく(ゲームが始まるころには読み終わっている)
-['pizza', 'burger_b', 'burger_l', 'burger_p', 'burger_t', 'burger_o', 'burger_c', 'burger_q', 'burger_u', 'burger_plate', 'burger_bottle'].forEach(gameImg);
+['pizza', 'burger_b', 'burger_l', 'burger_p', 'burger_t', 'burger_o', 'burger_c', 'burger_q', 'burger_u', 'burger_plate', 'burger_bottle', 'curry_pot'].forEach(gameImg);
 
 /* --- キレイに切って! --- */
 function playCut(stage, round, submit) {

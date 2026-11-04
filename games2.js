@@ -1663,6 +1663,8 @@ function playCurry(stage, round, submit) {
 
     const drawPot = (e) => {
       ctx.clearRect(0, 0, W, H);
+      const im = gameImg('curry_pot');
+      if (im) { drawPotImg(im, e); return; }
       const px = W / 2, py = H * 0.72, pw = Math.min(W * 0.36, H * 0.75);
       // 鍋の中身
       ctx.fillStyle = '#8a4b1e';
@@ -1688,6 +1690,37 @@ function playCurry(stage, round, submit) {
         const x = px + j * pw * 0.45, ph = e * 3 + j;
         ctx.beginPath(); ctx.moveTo(x, py - H * 0.3);
         ctx.quadraticCurveTo(x + Math.sin(ph) * 10, py - H * 0.42, x, py - H * 0.55); ctx.stroke();
+      }
+    };
+
+    // 鍋の絵(v=29〜)。読めていないときは下の図形で描く
+    const drawPotImg = (im, e) => {
+      let ih = H * 0.94, iw = ih * im.naturalWidth / im.naturalHeight;
+      if (iw > W * 0.92) { iw = W * 0.92; ih = iw * im.naturalHeight / im.naturalWidth; }
+      const ix = (W - iw) / 2, iy = H - ih;
+      const sx = W / 2, sy = iy + ih * 0.38;          // カレーの表面のまんなか
+      ctx.drawImage(im, ix, iy, iw, ih);
+      if (phase === 'show') {
+        const k = Math.floor(e / C.SHOW), f = (e - k * C.SHOW) / C.SHOW;
+        if (k < N) {
+          const top = -H * 0.05, sz = H * 0.2;
+          if (f < 0.55) drawSpice(ctx, rec[k], sx, top + (sy - top) * (f / 0.55) * (f / 0.55), sz);   // だんだん速く落ちる
+          else if (f < 0.8) {                         // カレーに沈む: 小さく・うすく + 波紋
+            const g = (f - 0.55) / 0.25;
+            ctx.save(); ctx.globalAlpha = 1 - g;
+            drawSpice(ctx, rec[k], sx, sy, sz * (1 - 0.7 * g));
+            ctx.strokeStyle = 'rgba(255,230,170,0.8)'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.ellipse(sx, sy, iw * (0.06 + 0.22 * g), ih * (0.02 + 0.08 * g), 0, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+          }
+        }
+      }
+      // 湯気
+      ctx.strokeStyle = 'rgba(242,244,255,0.22)'; ctx.lineWidth = 3;
+      for (let j = -1; j <= 1; j++) {
+        const x = sx + j * iw * 0.2, ph = e * 3 + j;
+        ctx.beginPath(); ctx.moveTo(x, sy - ih * 0.05);
+        ctx.quadraticCurveTo(x + Math.sin(ph) * 10, sy - ih * 0.22, x, Math.max(2, sy - ih * 0.42)); ctx.stroke();
       }
     };
 
