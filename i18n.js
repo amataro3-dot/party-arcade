@@ -105,8 +105,8 @@ const I18N_GAMES = {
     ko: { title: '피해라!', desc: '위에서 떨어지는 것들을 계속 피하세요!<br>조작은 「땅보다 아래」에서 손가락을 좌우로 움직여요.<br>지그재그 나뭇잎, 거대한 바위, 도중에 빨라지는 공, 쪼개지는 바위, 빨갛게 빛난 곳에 떨어지는 기둥도 조심!<br>오래 살아남을수록 상위. 15초 버티면 클리어.' }
   },
   burger: {
-    en: { title: 'Build a Muddy’s Burger!', desc: 'Catch the falling ingredients on your plate and stack them up!<br>Move your finger left and right below the ground line.<br>The more centered, the higher the score. Too far off and it falls.<br>Ketchup comes before the top bun! Follow the wiggly bottle and catch it on the top ingredient.<br>Lean too much and the tower collapses! Stack up to the top bun to finish!' },
-    ko: { title: '머디스 버거를 만들어라!', desc: '위에서 떨어지는 재료를 접시로 받아서 쌓아 올리세요!<br>조작은 「땅보다 아래」에서 손가락을 좌우로 움직여요.<br>가운데에 올릴수록 고득점. 너무 어긋나면 떨어져요.<br>위 번 전에 케첩! 꿈틀꿈틀 움직이는 병에 맞춰 맨 위 재료로 받으세요.<br>탑이 너무 기울면 무너져요! 위 번까지 올리면 완성!' }
+    en: { title: 'Build a Muddy’s Burger!', desc: 'Catch the falling ingredients on your plate and stack them up!<br>Move your finger left and right below the ground line.<br>The more centered, the higher the score. Too far off and it falls.<br>Two pickles fall one right after the other, swinging wildly! They’re slippery, so be careful.<br>Ketchup comes before the top bun! Follow the wiggly bottle and catch it on the top ingredient.<br>Lean too much and the tower collapses! Stack up to the top bun to finish!' },
+    ko: { title: '머디스 버거를 만들어라!', desc: '위에서 떨어지는 재료를 접시로 받아서 쌓아 올리세요!<br>조작은 「땅보다 아래」에서 손가락을 좌우로 움직여요.<br>가운데에 올릴수록 고득점. 너무 어긋나면 떨어져요.<br>피클은 2장이 크게 흔들리며 연달아 떨어져요! 미끄러우니 조심하세요.<br>위 번 전에 케첩! 꿈틀꿈틀 움직이는 병에 맞춰 맨 위 재료로 받으세요.<br>탑이 너무 기울면 무너져요! 위 번까지 올리면 완성!' }
   },
   jack: {
     en: { title: 'Pour the Jack!', desc: 'While you hold the bottle, Jack pours into the glass.<br>Let go to stop. You can add more, but you can’t take any out.<br>No numbers are shown. Watch the level and tap “OK”!<br>The glass holds <b style="color:#ffcc33">315ml</b> to the brim. Overflow and you fail.<br>The closer to the target amount, the higher you rank.' },
@@ -318,6 +318,7 @@ const I18N = {
   'トマト': ['Tomato', '토마토'],
   '玉ねぎ': ['Onion', '양파'],
   'チーズ': ['Cheese', '치즈'],
+  'ピクルス': ['Pickle', '피클'],
   '上のバンズ': ['Top bun', '위 번'],
 
   // --- ジャックを注げ! ---

@@ -5,7 +5,7 @@
 GAMES.push(
   {
     id: 'burger', title: 'マディーズバーガーを作ろう!',
-    desc: '上から落ちてくる具材を、お皿で受け止めて積み上げよう!<br>操作は「地面より下」で指を左右に動かす。<br>真ん中に乗せるほど高得点。ずれすぎると落ちる。<br>上のバンズの前にケチャップ! ウネウネ動くボトルに合わせて、いちばん上の具材で受け止めよう。<br>塔が傾きすぎると崩れる! 上のバンズまで乗せたら完成!',
+    desc: '上から落ちてくる具材を、お皿で受け止めて積み上げよう!<br>操作は「地面より下」で指を左右に動かす。<br>真ん中に乗せるほど高得点。ずれすぎると落ちる。<br>ピクルスは2枚続けて大きく揺れながら落ちてくる! すべりやすいので注意。<br>上のバンズの前にケチャップ! ウネウネ動くボトルに合わせて、いちばん上の具材で受け止めよう。<br>塔が傾きすぎると崩れる! 上のバンズまで乗せたら完成!',
     lowerBetter: false, miss: 0,
     isMiss: v => v < 1,
     fmt: (v, x) => {
@@ -62,15 +62,22 @@ function rrect(ctx, x, y, w, h, r) {
    ============================================================ */
 
 // 具材。w=幅 h=厚み(世界の幅を1とする) k=許されるずれの倍率 f=落ちる時間の倍率 m=重さ
+// sway=ゆれる大きさ(左右の幅) sf=ゆれる速さ slip=すべりやすい(乗ったあとすべる・崩れやすい)
+// dh=絵の高さ(厚みの何倍か) up=はみ出す分のうち上に出す割合(0=下へ、1=上へ)
 const BURGER_KIND = {
-  b: { name: '下のバンズ', w: 0.26, h: 0.068, k: 1, f: 1, m: 1 },
-  l: { name: 'レタス', w: 0.3, h: 0.038, k: 1, f: 1.2, m: 0.6, sway: true },
-  p: { name: 'パティ', w: 0.25, h: 0.068, k: 1, f: 0.85, m: 1.6 },
-  t: { name: 'トマト', w: 0.24, h: 0.038, k: 0.7, f: 1, m: 0.8 },
-  o: { name: '玉ねぎ', w: 0.18, h: 0.03, k: 0.8, f: 1, m: 0.6 },
-  c: { name: 'チーズ', w: 0.26, h: 0.022, k: 1.4, f: 1, m: 0.7, sticky: true },
-  u: { name: '上のバンズ', w: 0.26, h: 0.1, k: 1, f: 1, m: 1 }
+  b: { name: '下のバンズ', w: 0.26, h: 0.072, k: 1, f: 1, m: 1, dh: 1.2, up: 0.3 },
+  l: { name: 'レタス', w: 0.3, h: 0.038, k: 1, f: 1.2, m: 0.6, sway: 0.07, sf: 4.5, dh: 2.2, up: 0.5 },
+  p: { name: 'パティ', w: 0.25, h: 0.072, k: 1, f: 0.85, m: 1.6, dh: 1.35, up: 0.5 },
+  t: { name: 'トマト', w: 0.24, h: 0.05, k: 0.7, f: 1, m: 0.8, dh: 1.5, up: 0.5 },
+  o: { name: '玉ねぎ', w: 0.18, h: 0.03, k: 0.8, f: 1, m: 0.6, dh: 1, up: 0.5 },
+  c: { name: 'チーズ', w: 0.26, h: 0.022, k: 1.4, f: 1, m: 0.7, sticky: true, dh: 4, up: 0.08 },
+  q: { name: 'ピクルス', w: 0.15, h: 0.022, k: 0.8, f: 1.15, m: 0.4, sway: 0.15, sf: 3.4, slip: true, dh: 1.15, up: 0.5 },
+  u: { name: '上のバンズ', w: 0.26, h: 0.1, k: 1, f: 1, m: 1, dh: 1, up: 1 }
 };
+const BURGER_PICKLE_LAG = 0.5;   // ピクルス2枚目が落ちはじめるまで(秒)
+const BURGER_SLIP = 0.6;         // すべる強さ(着地したずれの何倍、外へすべるか)
+const BURGER_SLIP_TOPPLE = 0.7;
+const BURGER_GROW = 1.12;        // 絵を何倍に大きく描いて、となりの具材と重ねるか  // すべりやすい具材のところは、これだけ崩れやすい
 
 // 難しさの設定(ここを変えると難しさが変わる)
 function burgerCfg() {
@@ -78,6 +85,7 @@ function burgerCfg() {
     WH: 1.2,          // 世界の高さ(幅を1とする)
     PLATE_W: 0.4,     // お皿の幅
     PLATE_H: 0.03,    // お皿の厚み
+    PLATE_MIN: 0.08, PLATE_MAX: 0.92, // お皿の真ん中が動ける範囲(端でゆれるレタス・ピクルスにも届くように。お皿は半分くらい画面の外に出る)
     VMAX: 1.5,        // お皿の最高速度(幅/秒)
     ACC: 9,           // お皿の加速の強さ(小さいほどもっさり)
     FOLLOW: 6,        // 指を追いかける強さ
@@ -87,7 +95,7 @@ function burgerCfg() {
     TOPPLE: 0.85,     // 重心がすぐ下の具材の幅の半分×これを超えると崩れる
     WOB_K: 60, WOB_D: 6, WOB_G: 0.1, // 揺れ(ばねの強さ・おさまりやすさ・お皿の加速の効き)
     GAP: 0.15,        // 次の具材が出るまでの間(秒)
-    T0: 1.6, T1: 0.8, // 1個目と10個目の落ちる時間(秒)
+    T0: 1.6, T1: 0.8, // 1個目と最後(上のバンズ)の落ちる時間(秒)
     DROP: 0.03,       // ケチャップを1滴出す間隔(秒)
     DROP_V: 2.4,      // ケチャップの落ちる速さ(高さ/秒)
     NOZ: 0.1          // ケチャップのボトルの口の高さ(世界のy)
@@ -96,17 +104,21 @@ function burgerCfg() {
 
 // 具材の順番と落ちる位置、ケチャップの動き。種が同じなら全員同じ
 // 'K' はケチャップ(上のバンズの直前)
+// ピクルスは2枚セット('Q')で順番を決めて、2枚に分ける。2枚目は lag 秒後に、1枚目が落ちている最中でも落ちはじめる
 function burgerMake(seed) {
   const C = burgerCfg(), rnd = seededRng(seed);
-  const mid = ['l', 'l', 'p', 'p', 't', 'o', 'c', 'c'];
+  const mid = ['l', 'l', 'p', 'p', 't', 'o', 'c', 'c', 'Q'];
   for (let i = mid.length - 1; i > 0; i--) {
     const j = Math.floor(rnd() * (i + 1));
     [mid[i], mid[j]] = [mid[j], mid[i]];
   }
-  const items = ['b', ...mid, 'u'].map((k, i) => ({
-    k, x: 0.18 + rnd() * 0.64, ph: rnd() * Math.PI * 2,
-    T: C.T0 + (C.T1 - C.T0) * i / 9
-  }));
+  const ks = ['b', ...mid.flatMap(k => k === 'Q' ? ['q', 'q2'] : [k]), 'u'];
+  const fallT = i => C.T0 + (C.T1 - C.T0) * i / (ks.length - 1);
+  const items = ks.map((k, i) => {
+    const it = { k: k === 'q2' ? 'q' : k, x: 0.18 + rnd() * 0.64, ph: rnd() * Math.PI * 2, T: fallT(i) };
+    if (k === 'q2') { it.lag = BURGER_PICKLE_LAG; it.T = fallT(i - 1); }   // 2枚目は1枚目と同じ速さ
+    return it;
+  });
   const kp = {
     k: 'K',
     dur: 2.5 + rnd() * 0.5,                         // 出している時間(秒)
@@ -128,10 +140,10 @@ function burgerKetchupX(kp, u) {
   return Math.max(0.06, Math.min(0.94, x));
 }
 
-// レタスはひらひら揺れる。age 秒後の横位置
+// レタスはひらひら、ピクルスはもっと大きく揺れる。age 秒後の横位置
 function burgerItemX(it, age) {
-  const w = BURGER_KIND[it.k].w;
-  const x = it.x + (BURGER_KIND[it.k].sway ? 0.07 * Math.sin(age * 4.5 + it.ph) : 0);
+  const kd = BURGER_KIND[it.k], w = kd.w;
+  const x = it.x + (kd.sway ? kd.sway * Math.sin(age * kd.sf + it.ph) : 0);
   return Math.max(w / 2, Math.min(1 - w / 2, x));
 }
 
@@ -166,7 +178,9 @@ function playBurger(stage, round, submit) {
     const pops = [];                          // 「Perfect!」などの文字
     const marks = [];                         // 各具材の結果 P/G/E/X
     const offs = [];                          // 乗った具材のずれ(同点対策用)
-    let bonus = 0, cur = null, next = 0, wait = 0.3, sim = 0, done = false, iv = null;
+    let bonus = 0, next = 0, wait = 0.3, sim = 0, done = false, iv = null;
+    const curs = [];                          // いま落ちている具材(ピクルスは2枚同時)
+    let lastSpawn = 0;                        // 最後に落としはじめた時刻
     let kc = null, kPts = 0;                  // ケチャップの最中の様子 / ケチャップの点数
     const kName = it => it.k === 'K' ? T('ケチャップ') : T(K[it.k].name);
 
@@ -178,18 +192,19 @@ function playBurger(stage, round, submit) {
     const updateHead = () => {
       dotsEl.innerHTML = items.map((it, i) => {
         const m = marks[i];
-        const now = (cur && cur.idx === i) || (kc && kc.idx === i);
+        const now = curs.some(c => c.idx === i) || (kc && kc.idx === i);
         const c = m === 'P' ? '#ffcc33' : m === 'G' || m === 'E' ? '#35d07f' : m === 'X' ? '#ff5c6c' : m === 'K' ? '#e8452c' : now ? '#f2f4ff' : 'rgba(242,244,255,0.25)';
         return `<span style="color:${c}">●</span>`;
       }).join('');
-      const ni = next + (cur || kc ? 1 : 0);
+      const ni = next;
       nxEl.textContent = ni < items.length ? kName(items[ni]) : '—';
     };
 
     const spawn = () => {
       const it = items[next];
       if (it.k === 'K') kc = { kp: it, idx: next, t0: sim, n: 0, hit: 0, drops: [] };   // ケチャップ開始
-      else cur = Object.assign({}, it, { idx: next, t0: sim, vy: BASE / (it.T * K[it.k].f) });
+      else curs.push(Object.assign({}, it, { idx: next, t0: sim, vy: BASE / (it.T * K[it.k].f) }));
+      next++; lastSpawn = sim;
       updateHead();
     };
 
@@ -219,7 +234,7 @@ function playBurger(stage, round, submit) {
         kPts = Math.round(100 * kc.hit / Math.max(1, kc.n));
         marks[kc.idx] = 'K';
         pop(T('ケチャップ') + ' ' + kPts + '%', n ? layerX(n - 1) : px, top - 0.06, '#ff7a66', true);
-        kc = null; next++; wait = C.GAP;
+        kc = null; wait = C.GAP;
         updateHead();
       }
     };
@@ -243,13 +258,14 @@ function playBurger(stage, round, submit) {
         for (let j = k; j < stack.length; j++) { const m = K[stack[j].k].m; sm += m; sx += m * xs[j]; }
         const sup = k ? xs[k - 1] : px;
         const hw = (k ? K[stack[k - 1].k].w : C.PLATE_W) / 2;
-        const lim = hw * C.TOPPLE * (K[stack[k].k].sticky ? 1.3 : 1);   // チーズはくっつく
+        let lim = hw * C.TOPPLE * (K[stack[k].k].sticky ? 1.3 : 1);     // チーズはくっつく
+        if (K[stack[k].k].slip || (k && K[stack[k - 1].k].slip)) lim *= BURGER_SLIP_TOPPLE;   // ピクルスはすべって崩れやすい
         const lean = sx / sm - sup;
         if (Math.abs(lean) > lim) { collapse(k, lean); return; }
       }
     };
 
-    const land = (x, top) => {
+    const land = (cur, x, top) => {
       const n = stack.length, k = cur.k;
       const below = n ? layerX(n - 1) : px;
       const d = x - below, ad = Math.abs(d);
@@ -263,19 +279,22 @@ function playBurger(stage, round, submit) {
         stack.push({ k, dx: 0 });
         stack[n].dx = x - px - wob * hfOf(n);       // 見た目の位置のまま乗せる
         offs.push(ad / kk);
+        // すべりやすい(ピクルスが乗った・ピクルスの上に乗った): ずれた向きに、少しすべっていく
+        if (K[k].slip || (n && K[stack[n - 1].k].slip)) stack[n].slide = d * BURGER_SLIP;
         if (ad <= C.PERFECT * kk) { bonus += 30; marks[cur.idx] = 'P'; pop('Perfect!', x, top - 0.05, '#ffcc33', true); }
         else if (ad <= C.GOOD * kk) { bonus += 15; marks[cur.idx] = 'G'; pop('Good', x, top - 0.05, '#35d07f'); }
         else { marks[cur.idx] = 'E'; pop(T('ギリギリ'), x, top - 0.05, '#f2f4ff'); }
         wobV += d * 3;                              // 着地の勢いで少し揺れる
         checkTopple();
       }
-      cur = null; next++; wait = C.GAP;
+      curs.splice(curs.indexOf(cur), 1);
+      if (!curs.length) wait = C.GAP;
       updateHead();
     };
 
     const finish = () => {
       if (done) return;
-      done = true; cur = null;
+      done = true; curs.length = 0;
       const n = stack.length;
       const complete = n > 0 && stack[n - 1].k === 'u';
       const score = n * 50 + bonus + (complete ? 100 : 0) + kPts;
@@ -304,21 +323,31 @@ function playBurger(stage, round, submit) {
       const dv = Math.max(-C.ACC * dt, Math.min(C.ACC * dt, want - pv));
       pv += dv;
       px += pv * dt;
-      if (px < 0.2 || px > 0.8) { px = Math.max(0.2, Math.min(0.8, px)); pv = 0; }
+      if (px < C.PLATE_MIN || px > C.PLATE_MAX) { px = Math.max(C.PLATE_MIN, Math.min(C.PLATE_MAX, px)); pv = 0; }
       // 塔の揺れ(急に動かすほど揺れる)
       wobV += (-C.WOB_K * wob - C.WOB_D * wobV - (dv / dt) * C.WOB_G) * dt;
       wob += wobV * dt;
+      // すべっている具材を動かす
+      stack.forEach(l => {
+        if (!l.slide) return;
+        const mv = l.slide * Math.min(1, dt * 6);
+        l.dx += mv; l.slide -= mv;
+        if (Math.abs(l.slide) < 0.0005) l.slide = 0;
+      });
       if (stack.length) checkTopple();
       moveDebris(dt);
       // いま落ちている具材
       if (kc) stepKetchup(dt);
-      else if (cur) {
-        const age = sim - cur.t0, yb = cur.vy * age, top = BASE - stackH(stack.length);
-        if (yb >= top) land(burgerItemX(cur, age), top);
-      } else if (next < items.length) {
-        wait -= dt;
-        if (wait <= 0) spawn();
-      } else finish();
+      else {
+        curs.slice().forEach(c => {
+          const age = sim - c.t0, yb = c.vy * age, top = BASE - stackH(stack.length);
+          if (yb >= top) land(c, burgerItemX(c, age), top);
+        });
+        if (next < items.length) {
+          if (!curs.length) { wait -= dt; if (wait <= 0) spawn(); }
+          else if (items[next].lag && sim - lastSpawn >= items[next].lag) spawn();   // ピクルス2枚目
+        } else if (!curs.length) finish();
+      }
     };
 
     const draw = () => {
@@ -351,7 +380,7 @@ function playBurger(stage, round, submit) {
         if (age <= kc.kp.dur + 0.3) drawKetchupBottle(ctx, X(burgerKetchupX(kc.kp, Math.min(1, age / kc.kp.dur))), Y(C.NOZ), s);
       }
       // 落ちている具材と、着地する場所のガイド(点線と影)
-      if (cur && !done) {
+      if (!done) curs.forEach(cur => {
         const age = sim - cur.t0, x = burgerItemX(cur, age), yb = cur.vy * age;
         const top = BASE - stackH(stack.length), kd = K[cur.k];
         ctx.strokeStyle = 'rgba(255,204,51,0.45)'; ctx.lineWidth = 2; ctx.setLineDash([6, 6]);
@@ -360,7 +389,7 @@ function playBurger(stage, round, submit) {
         ctx.fillStyle = 'rgba(0,0,0,0.35)';
         ctx.beginPath(); ctx.ellipse(X(x), Y(top), kd.w * s * 0.45, Math.max(3, kd.w * s * 0.08), 0, 0, Math.PI * 2); ctx.fill();
         drawBurgerItem(ctx, cur.k, X(x), Y(yb), kd.w * s, kd.h * s);
-      }
+      });
       // 落ちていく具材(回りながら)
       debris.forEach(o => {
         const kd = K[o.k];
@@ -415,7 +444,7 @@ function playBurger(stage, round, submit) {
         sim += dt;
         if (!done) {
           step(dt);
-          if (sim > 19) finish();                 // 念のため(必ず終わる)
+          if (sim > 22.5) finish();               // 念のため(必ず終わる。ピクルスで長くなったので最長約20秒。ラウンドは25秒で打ち切り)
         } else moveDebris(dt);                    // 終わったあとも、落ちた具材は下へ落ちていく
       }
       draw();
@@ -433,6 +462,12 @@ function drawBurgerKetchup(ctx, xs, cx, yt, sc) {
 
 // ケチャップのボトル(さかさま)。(x, y) が口の位置
 function drawKetchupBottle(ctx, x, y, s) {
+  const im = gameImg('burger_bottle');
+  if (im) {                                          // 絵: 口(いちばん下)が (x, y)
+    const h = s * 0.17, w = h * im.naturalWidth / im.naturalHeight;
+    ctx.drawImage(im, x - w / 2, y - h, w, h);
+    return;
+  }
   const w = s * 0.07, h = s * 0.13;
   ctx.fillStyle = '#d8352a';
   rrect(ctx, x - w / 2, y - h - s * 0.03, w, h, w * 0.3); ctx.fill();
@@ -443,6 +478,12 @@ function drawKetchupBottle(ctx, x, y, s) {
 }
 
 function drawBurgerPlate(ctx, cx, gy, w, h) {
+  const im = gameImg('burger_plate');
+  if (im) {                                          // 絵: 上の面が gy - h になるように
+    const ih = w * im.naturalHeight / im.naturalWidth;
+    ctx.drawImage(im, cx - w * 0.55, gy - h - ih * 0.15, w * 1.1, ih * 1.1);
+    return;
+  }
   ctx.fillStyle = '#dfe4f2';
   rrect(ctx, cx - w / 2, gy - h, w, h, h / 2); ctx.fill();
   ctx.fillStyle = 'rgba(0,0,0,0.18)';
@@ -452,6 +493,18 @@ function drawBurgerPlate(ctx, cx, gy, w, h) {
 // 具材を1つ描く。cx=横の真ん中、yb=下の面のy、w/h=幅と厚み(すべてpx)
 function drawBurgerItem(ctx, k, cx, yb, w, h) {
   const x0 = cx - w / 2, yt = yb - h;
+  const kd = BURGER_KIND[k], im = gameImg('burger_' + k);
+  if (im && kd) {                                    // 絵(はみ出す分は kd.dh・kd.up で上下に分ける)
+    // 絵を少し大きく描いて、上下の具材と重ねる(絵の丸い角のすき間をかくす。積む高さ・当たりは変わらない)
+    const g = BURGER_GROW, dh = h * kd.dh, extra = dh - h;
+    ctx.drawImage(im, cx - w * g / 2, yt - extra * kd.up - dh * (g - 1) / 2, w * g, dh * g);
+    return;
+  }
+  if (k === 'q') {                                   // ピクルス(絵がないとき)
+    ctx.fillStyle = '#8fae3a'; rrect(ctx, x0, yt, w, h, h * 0.5); ctx.fill();
+    ctx.fillStyle = '#c8d86a'; ctx.fillRect(x0 + w * 0.1, yt + h * 0.3, w * 0.8, h * 0.3);
+    return;
+  }
   if (k === 'b') {                                   // 下のバンズ
     ctx.fillStyle = '#d9984a'; rrect(ctx, x0, yt, w, h, h * 0.45); ctx.fill();
     ctx.fillStyle = '#f3d39a'; ctx.fillRect(x0 + h * 0.3, yt, w - h * 0.6, h * 0.28);
@@ -502,7 +555,7 @@ function drawBurgerResult(el, data, size) {
   const ctx = cv.getContext('2d');
   ctx.scale(dpr, dpr);
   const C = burgerCfg(), K = BURGER_KIND;
-  const sc = size / 0.8, cx = size / 2, gy = size * 0.94;
+  const sc = size / 0.95, cx = size / 2, gy = size * 0.94;   // ピクルスで高くなった分、少し小さく
   drawBurgerPlate(ctx, cx, gy, C.PLATE_W * sc, C.PLATE_H * sc);
   const ks = (data && typeof data.k === 'string') ? data.k : '';
   const raw = data && data.d ? data.d : [];

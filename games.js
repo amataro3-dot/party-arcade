@@ -418,6 +418,27 @@ GAMES.push(
   }
 );
 
+/* --- 絵(img/ の画像)を読む --- */
+// 画像にも js と同じ版の番号をつける(games.js の ?v= をそのまま使うので、set-version で一緒に変わる)
+const ASSET_V = (() => {
+  try { const m = (document.currentScript && document.currentScript.src || '').match(/\?v=([^&#]+)/); return m ? m[1] : ''; }
+  catch (e) { return ''; }
+})();
+const GAME_IMGS = {};
+// 名前で画像を返す。まだ読みこみ中・読めなかったときは null(そのときは図形で描く)
+function gameImg(name) {
+  if (typeof Image === 'undefined') return null;   // ブラウザ以外(tools の道具)では読まない
+  let im = GAME_IMGS[name];
+  if (!im) {
+    im = new Image();
+    im.src = 'img/' + name + '.webp' + (ASSET_V ? '?v=' + ASSET_V : '');
+    GAME_IMGS[name] = im;
+  }
+  return im.complete && im.naturalWidth ? im : null;
+}
+// 先に読みこんでおく(ゲームが始まるころには読み終わっている)
+['pizza', 'burger_b', 'burger_l', 'burger_p', 'burger_t', 'burger_o', 'burger_c', 'burger_q', 'burger_u', 'burger_plate', 'burger_bottle'].forEach(gameImg);
+
 /* --- キレイに切って! --- */
 function playCut(stage, round, submit) {
   // 番号ではなく id で自分を探すので、組み込み時に番号を直さなくてよい
@@ -469,10 +490,12 @@ function playCut(stage, round, submit) {
       ctx.clearRect(0, 0, W, H);
       drawCutCircle(ctx, cx, cy, R, cuts, withLabels ? N : 0);
       // ドラッグ中の線(円の外に出たら黄色)
+      // ドラッグ中の線(点線): 円の中は黒、円の外に出たら黄色に黒いふち
       if (drag) {
-        ctx.strokeStyle = dist(drag) > R ? '#ffcc33' : 'rgba(242,244,255,0.5)';
-        ctx.lineWidth = 4; ctx.setLineDash([8, 6]);
-        ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(drag.x, drag.y); ctx.stroke();
+        ctx.setLineDash([8, 6]); ctx.lineCap = 'butt';
+        const line = (c, w) => { ctx.strokeStyle = c; ctx.lineWidth = w; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(drag.x, drag.y); ctx.stroke(); };
+        if (dist(drag) > R) { line('rgba(20,16,10,0.9)', 7); line('#ffcc33', 4); }
+        else line('rgba(20,16,10,0.85)', 4);
         ctx.setLineDash([]);
       }
     };
@@ -552,27 +575,43 @@ function cutDeviation(cuts, N) {
 
 // 円と切った線を描く。labelN を渡すと各切れの割合も書く(プレイ画面とリザルトで共用)
 function drawCutCircle(ctx, cx, cy, R, cuts, labelN) {
-  ctx.fillStyle = 'rgba(255,204,51,0.15)';
-  ctx.strokeStyle = '#f2f4ff'; ctx.lineWidth = Math.max(2, R / 50);
-  ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.lineWidth = Math.max(2, R / 35); ctx.lineCap = 'round';
-  cuts.forEach(a => {
-    ctx.beginPath(); ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); ctx.stroke();
+  const pz = gameImg('pizza');
+  if (pz) {                                   // ピザの絵(円の形に切り抜いてある)
+    ctx.drawImage(pz, cx - R, cy - R, R * 2, R * 2);
+  } else {                                    // 読みこみ前は、前と同じ黄色い円
+    ctx.fillStyle = 'rgba(255,204,51,0.15)';
+    ctx.strokeStyle = '#f2f4ff'; ctx.lineWidth = Math.max(2, R / 50);
+    ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
+  // 決定した線: 黄色に黒いふち(先に太い黒、上に黄色)
+  const lw = Math.max(2, R / 35), edge = Math.max(1, R / 60);
+  ctx.lineCap = 'round';
+  [['rgba(20,16,10,0.9)', lw + edge * 2], ['#ffcc33', lw]].forEach(([c, w]) => {
+    ctx.strokeStyle = c; ctx.lineWidth = w;
+    cuts.forEach(a => {
+      ctx.beginPath(); ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); ctx.stroke();
+    });
   });
   if (labelN && cuts.length) {
     const s = cuts.map(a => (a % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2)).sort((a, b) => a - b);
     ctx.fillStyle = '#ffcc33';
+    ctx.strokeStyle = 'rgba(20,16,10,0.9)'; ctx.lineJoin = 'round';   // ピザの上でも読めるように黒いふち
+    ctx.lineWidth = Math.max(3, R / 30);
     ctx.font = `bold ${Math.max(10, Math.round(R / 9))}px sans-serif`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     s.forEach((a, i) => {
       const b = i + 1 < s.length ? s[i + 1] : s[0] + Math.PI * 2;
       const m = (a + b) / 2;
-      ctx.fillText(((b - a) / (Math.PI * 2) * 100).toFixed(1) + '%', cx + Math.cos(m) * R * 0.64, cy + Math.sin(m) * R * 0.64);
+      const t = ((b - a) / (Math.PI * 2) * 100).toFixed(1) + '%';
+      const tx = cx + Math.cos(m) * R * 0.64, ty = cy + Math.sin(m) * R * 0.64;
+      ctx.strokeText(t, tx, ty); ctx.fillText(t, tx, ty);
     });
   }
+  // 真ん中の点: 黄色に黒いふち
   ctx.fillStyle = '#ffcc33';
   ctx.beginPath(); ctx.arc(cx, cy, Math.max(3, R / 14), 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(20,16,10,0.9)'; ctx.lineWidth = Math.max(1.5, R / 40); ctx.stroke();
 }
 
 // リザルト用:el(div など)の中に、その人の切った円を小さく描く
