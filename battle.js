@@ -227,7 +227,7 @@ function renderRoundResult() {
   const list = rankGame(gi), st = solo ? [] : standing(gi);
   const crown = id => isNewTitle(g, id, room.round.startAt) ? '<div class="viz" style="text-align:left;color:#ffcc33;font-weight:800;font-size:14px">👑 ' + T('新記録! タイトル獲得!') + '</div>' : '';
   const hasRes = p => !!g.result && p.x !== undefined && p.v !== null;
-  const isAdmin = room.admin === pid, last = gi >= c.rounds - 1;
+  const isAdmin = room.admin === pid, last = gi >= c.rounds - 1;   // 最終ラウンドは「ここまでの合計」を出さない(最終発表の前に順位が見えないように)
   const title = solo ? g.title : T('ラウンド') + ' ' + (gi + 1) + '/' + c.rounds + ' ' + g.title;
   let actions;
   if (!isAdmin) actions = '<div class="center sub">' + T('管理者の操作を待っています…') + '</div>';
@@ -240,7 +240,7 @@ function renderRoundResult() {
     <div class="card">
       ${list.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (' + T('あなた') + ')' : ''}</span><span class="val">${p.v === null ? T('未提出') : h(g.fmt(p.v, p.x))}</span>${solo ? '' : `<span class="pt">+${p.pts}</span>`}${crown(p.id)}${hasRes(p) ? '<div class="viz" data-rp></div>' : ((g.viz && p.x !== undefined && p.v !== null) ? `<div class="viz">${g.viz(p.v, p.x)}</div>` : '')}</div>`).join('')}
     </div>
-    ${solo ? '' : `<div class="card">
+    ${(solo || last) ? '' : `<div class="card">
       <div class="sub">${T('ここまでの合計')}</div>
       ${st.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (' + T('あなた') + ')' : ''}</span><span class="tot">${p.total}</span></div>`).join('')}
     </div>`}
