@@ -1,7 +1,12 @@
 /* ロビー・ラウンドの進行・プレイ画面・結果。最後に init() で起動する。 */
 
 /* ---------- 設定・ラウンド構成 ---------- */
-const DEFAULT_SETTINGS = { mode: 'arcade', rounds: 4, doubleUp: false, finalUp: false, soloGame: GAMES[0].id };
+/* ラウンド数は 6 〜 ゲームの数(MAXなら全ゲームを1回ずつ) */
+const ROUND_MIN = 6;
+const roundMax = () => Math.max(ROUND_MIN, GAMES.length);
+const clampRounds = n => Math.min(roundMax(), Math.max(ROUND_MIN, Math.round(Number(n)) || ROUND_MIN));
+const roundChoices = () => Array.from({ length: roundMax() - ROUND_MIN + 1 }, (_, i) => ROUND_MIN + i);
+const DEFAULT_SETTINGS = { mode: 'arcade', rounds: ROUND_MIN, doubleUp: false, finalUp: false, soloGame: GAMES[0].id };
 const settings = () => Object.assign({}, DEFAULT_SETTINGS, room.settings || {});
 const gameAt = i => GAMES.find(g => g.id === room.config.playlist[i]) || GAMES[0];
 const multAt = i => {
@@ -39,7 +44,7 @@ function settingsCard() {
       <div class="sub">${isAdmin ? T('ゲーム(回して選ぶ)') : T('ゲーム')}</div>${pickerHtml('sp', st.soloGame, isAdmin)}`;
   } else {
     body = `<div class="sub">${T('ランダムなゲームを続けて遊び、合計ポイントで優勝を決める。')}</div>
-      <div class="sub">${T('ラウンド数')}</div>${seg('rounds', [4, 5, 6, 7, 8].map(n => [n, String(n)]), st.rounds, 'num')}
+      <div class="sub">${T('ラウンド数')}</div>${drumHtml('rp', roundChoices().map(String), clampRounds(st.rounds) - ROUND_MIN, isAdmin, 3, false)}
       <div class="sub">${T('ボーナス(チェックしなければなし)')}</div>
       <label class="chk"><input type="checkbox" ${dis} ${st.doubleUp ? 'checked' : ''} data-chk="doubleUp"><span><b>${T('ダブルアップ')}</b><small>${T('ランダムな1ラウンドのポイントが2倍。そのゲームの開始前に発表される。')}</small></span></label>
       <label class="chk"><input type="checkbox" ${dis} ${st.finalUp ? 'checked' : ''} data-chk="finalUp"><span><b>${T('ファイナルアップ')}</b><small>${T('最終ラウンドのポイントが2倍。')}</small></span></label>`;
@@ -65,7 +70,10 @@ function startGame() {
     if (id !== st.soloGame) setSetting('soloGame', id);
     cfg = { mode: 'solo', rounds: 1, doubleUp: false, finalUp: false, doubleRound: -1, playlist: [id] };
   } else {
-    const n = Math.min(8, Math.max(4, Number(st.rounds) || 4));
+    // 回した直後にスタートを押しても、画面で選んでいるラウンド数で始まるようにする
+    const ri = drumIndex('rp');
+    const n = ri >= 0 ? roundChoices()[ri] : clampRounds(st.rounds);
+    if (n !== Number(st.rounds)) setSetting('rounds', n);
     const doubleUp = !!st.doubleUp, finalUp = !!st.finalUp;
     const pool = finalUp ? n - 1 : n; // 両方ONなら、最終ラウンドは除いて選ぶ
     cfg = {
@@ -98,6 +106,7 @@ function renderLobby() {
   if (isAdmin) $('#start').onclick = startGame;
   document.querySelectorAll('[data-set]').forEach(b => { b.onclick = () => setSetting(b.dataset.set, b.dataset.v); });
   if ($('#sp')) pickerInit('sp', id => setSetting('soloGame', id));
+  if ($('#rp')) drumInit('rp', i => setSetting('rounds', roundChoices()[i]));
   document.querySelectorAll('[data-chk]').forEach(i => { i.onchange = () => setSetting(i.dataset.chk, i.checked); });
   document.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => playerAction(b.dataset.act, b.dataset.id); });
 }

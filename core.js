@@ -231,26 +231,30 @@ function renderTitles() {
   $('#back').onclick = () => renderHome();
 }
 
-/* ---------- ゲーム選択(ドラムロール) ----------
-   ゲーム名の縦リストを指で回して、真ん中に来たものを選ぶ。ソロゲームの設定と練習モードで使う。 */
+/* ---------- ドラムロール ----------
+   縦リストを指で回して、真ん中に来たものを選ぶ。
+   ゲーム選び(ソロゲームの設定・練習モード、5行・説明あり)と、ラウンド数(アーケードの設定、3行)で使う。 */
 const PICK_H = 46; // 1行の高さ(CSSの .pick-item と同じ)
-function pickerHtml(id, selId, enabled) {
-  const idx = Math.max(0, GAMES.findIndex(g => g.id === selId)), pad = PICK_H * 2;
-  return `<div class="pick"><div class="pick-win"></div>
+/* labels: 並べる文字 / idx: 最初に真ん中にする番号 / rows: 見える行数(5 か 3) / withDesc: 下に説明欄を出す */
+function drumHtml(id, labels, idx, enabled, rows, withDesc) {
+  const pad = PICK_H * (rows - 1) / 2;
+  idx = Math.max(0, Math.min(labels.length - 1, idx | 0));
+  return `<div class="pick${rows === 3 ? ' r3' : ''}"><div class="pick-win"></div>
     <div class="pick-list${enabled ? '' : ' off'}" id="${id}" data-sel="${idx}">
-      <div style="height:${pad}px"></div>${GAMES.map((g, i) => `<div class="pick-item" data-i="${i}">${h(g.title)}</div>`).join('')}<div style="height:${pad}px"></div>
-    </div></div>
-    <div class="sub pick-desc" id="${id}-d"></div>`;
+      <div style="height:${pad}px"></div>${labels.map((t, i) => `<div class="pick-item" data-i="${i}">${h(t)}</div>`).join('')}<div style="height:${pad}px"></div>
+    </div></div>${withDesc ? `
+    <div class="sub pick-desc" id="${id}-d"></div>` : ''}`;
 }
-/* onPick(ゲームのid) は、指を止めて少したってから呼ばれる */
-function pickerInit(id, onPick) {
-  const el = $('#' + id), desc = $('#' + id + '-d'); if (!el) return;
+/* onPick(番号) は、指を止めて少したってから呼ばれる。descOf(番号) があれば説明欄に出す */
+function drumInit(id, onPick, descOf) {
+  const el = $('#' + id); if (!el) return;
+  const desc = $('#' + id + '-d');
   const items = el.querySelectorAll('.pick-item');
-  const clamp = i => Math.max(0, Math.min(GAMES.length - 1, i));
+  const clamp = i => Math.max(0, Math.min(items.length - 1, i));
   let cur = clamp(+el.dataset.sel), t = null;
   const mark = i => {
     items.forEach((it, k) => it.classList.toggle('on', k === i));
-    if (desc) desc.innerHTML = GAMES[i].descBase || GAMES[i].desc;
+    if (desc && descOf) desc.innerHTML = descOf(i);
   };
   el.scrollTop = cur * PICK_H;
   mark(cur);
@@ -259,19 +263,33 @@ function pickerInit(id, onPick) {
     const i = clamp(Math.round(el.scrollTop / PICK_H));
     mark(i);
     clearTimeout(t);
-    t = setTimeout(() => { if (i !== cur) { cur = i; onPick(GAMES[i].id); } }, 180);
+    t = setTimeout(() => { if (i !== cur) { cur = i; onPick(i); } }, 180);
   });
   el.addEventListener('click', ev => {
     const it = ev.target.closest('.pick-item');
     if (it) el.scrollTo({ top: +it.dataset.i * PICK_H, behavior: 'smooth' });
   });
 }
-
-/* いま真ん中にあるゲームのid(回した直後でも、保存を待たずに読める)。見るだけの欄は null */
-function pickerValue(id) {
+/* いま真ん中にある番号(回した直後でも、保存を待たずに読める)。見るだけの欄・ないときは -1 */
+function drumIndex(id) {
   const el = $('#' + id);
-  if (!el || typeof el.scrollTop !== 'number' || el.classList.contains('off')) return null;
-  return GAMES[Math.max(0, Math.min(GAMES.length - 1, Math.round(el.scrollTop / PICK_H)))].id;
+  if (!el || typeof el.scrollTop !== 'number' || el.classList.contains('off')) return -1;
+  const n = el.querySelectorAll('.pick-item').length;
+  return Math.max(0, Math.min(n - 1, Math.round(el.scrollTop / PICK_H)));
+}
+
+/* ゲーム選び(5行・説明つき) */
+function pickerHtml(id, selId, enabled) {
+  return drumHtml(id, GAMES.map(g => g.title), Math.max(0, GAMES.findIndex(g => g.id === selId)), enabled, 5, true);
+}
+/* onPick(ゲームのid) */
+function pickerInit(id, onPick) {
+  drumInit(id, i => onPick(GAMES[i].id), i => GAMES[i].descBase || GAMES[i].desc);
+}
+/* いま真ん中にあるゲームのid。見るだけの欄は null */
+function pickerValue(id) {
+  const i = drumIndex(id);
+  return i < 0 ? null : GAMES[i].id;
 }
 
 /* ---------- 練習モード(ルームの外・1人用) ---------- */
