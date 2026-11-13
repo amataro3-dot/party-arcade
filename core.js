@@ -91,13 +91,13 @@ let records = {};
 const recValue = (g, v, x) => (g.rec ? g.rec(v, x) : v);
 const recText = (g, r) => { try { return g.recFmt ? g.recFmt(r.v, r.x || undefined) : g.fmt(r.v, r.x || undefined); } catch (e) { return ''; } };
 /* カウントダウン画面に出す1行 */
-/* タイトルホルダーを取れるのは、アーケードモードで、ルームに2人以上いるときだけ(1人でのタイトル狙いを防ぐ) */
+/* タイトルホルダーを取れるのは、アーケード・フルパーティで、ルームに2人以上いるときだけ(1人でのタイトル狙いを防ぐ) */
 function titleOk() {
-  return !!(room && room.config && room.config.mode === 'arcade' && room.players && Object.keys(room.players).length >= 2);
+  return !!(room && room.config && (room.config.mode === 'arcade' || room.config.mode === 'full') && room.players && Object.keys(room.players).length >= 2);
 }
 function titleHtml(game) {
   if (!db) return '';
-  const note = titleOk() ? '' : '<div style="font-size:12px;color:#9aa3c7;margin-top:2px">' + T('ここではタイトルは取れません(アーケード・2人以上のときだけ)') + '</div>';
+  const note = titleOk() ? '' : '<div style="font-size:12px;color:#9aa3c7;margin-top:2px">' + T('ここではタイトルは取れません(アーケード・フルパーティで2人以上のときだけ)') + '</div>';
   const r = records[game.id];
   const body = r && typeof r.v === 'number'
     ? `<b style="color:#f2f4ff">${h(r.name || '???')}</b>(${h(recText(game, r))})`
@@ -225,7 +225,7 @@ function renderTitles() {
   clearTimers();
   setApp(`
     <h1>👑 ${T('タイトルホルダー一覧')}</h1>
-    <div class="sub" style="margin:-4px 0 10px">${T('ゲームごとの、これまででいちばん良い記録です(アーケード・2人以上で遊んだ記録だけ)')}</div>
+    <div class="sub" style="margin:-4px 0 10px">${T('ゲームごとの、これまででいちばん良い記録です(アーケード・フルパーティで2人以上で遊んだ記録だけ)')}</div>
     <div class="card" id="titles" style="gap:8px">${titlesListHtml()}</div>
     <button class="btn ghost" id="back" style="margin-top:12px">${T('ホームに戻る')}</button>`);
   $('#back').onclick = () => renderHome();
@@ -444,9 +444,15 @@ function render() {
     else updateWaiting();
     return;
   }
+  if (phase === 'pick') {   // フルパーティのゲーム選び: 画面は1回だけ作る(ドラムロールを回している途中で戻らないように)
+    if (viewKey !== 'pick') { clearTimers(); viewKey = 'pick'; guardUntil = Date.now() + 700; renderPick(); }
+    else updatePick();
+    return;
+  }
   if (viewKey !== phase) guardUntil = Date.now() + 700;
   clearTimers(); viewKey = phase;
   if (phase === 'lobby') renderLobby();
   else if (phase === 'roundResult') renderRoundResult();
   else if (phase === 'final') renderFinal();
+  else if (phase === 'announce') renderAnnounce();
 }

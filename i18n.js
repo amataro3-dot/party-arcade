@@ -89,8 +89,8 @@ const I18N_GAMES = {
     ko: { title: '각도를 그려라!', desc: '가운데 점에서 드래그해서 목표 각도의 선을 그으세요!<br>회색 선과의 사이 각도로 판정.<br>손을 뗀 뒤 「결정!」으로 확정. 목표에 가까울수록 상위.' }
   },
   hata: {
-    en: { title: 'Flag Up, Flag Down!', desc: 'Raise and lower the flags just as the referee says!<br>Hold the “RED” / “WHITE” button = flag up, let go = flag down.<br>Watch for “… NOT!” at the end: move that flag even for a moment and it’s wrong. Don’t move a flag that isn’t called, either.<br>It gets faster! 15 calls (1 pt each) + streak bonus (4 in a row +1, 8 +2, 12 +3, 15 +4). Max 25 pts.' },
-    ko: { title: '깃발 올려 내려!', desc: '심판이 말하는 대로 깃발을 올리고 내리세요!<br>아래 「빨강」「하양」 버튼을 누르고 있으면 올리기, 떼면 내리기.<br>끝에 오는 「~지 마」 함정에서 잠깐이라도 움직이면 아웃. 불리지 않은 깃발도 움직이지 마세요.<br>점점 빨라져요! 지시는 15개(1개 1점) + 연속 정답 보너스(4연속 +1·8연속 +2·12연속 +3·15연속 +4). 최고 25점.' }
+    en: { title: 'Flag Up, Flag Down!', desc: 'Raise and lower the flags just as the referee says!<br>Hold the “RED” / “WHITE” button = flag up, let go = flag down.<br>Watch for “… NOT!” at the end: move that flag even for a moment and it’s wrong. Don’t move a flag that isn’t called, either.<br>It gets faster! 18 calls (1 pt each) + streak bonus (4 in a row +2, 8 +3, 12 +3, 18 +4). Max 30 pts.' },
+    ko: { title: '깃발 올려 내려!', desc: '심판이 말하는 대로 깃발을 올리고 내리세요!<br>아래 「빨강」「하양」 버튼을 누르고 있으면 올리기, 떼면 내리기.<br>끝에 오는 「~지 마」 함정에서 잠깐이라도 움직이면 아웃. 불리지 않은 깃발도 움직이지 마세요.<br>점점 빨라져요! 지시는 18개(1개 1점) + 연속 정답 보너스(4연속 +2·8연속 +3·12연속 +3·18연속 +4). 최고 30점.' }
   },
   oddcolor: {
     en: { title: 'Spot the Odd Color!', desc: 'Find and tap the one square with a slightly different color!<br>How many can you find in 15 seconds?<br>A wrong tap means a 1-second pause.<br>More correct answers rank higher. 0 found = 0 points.' },
@@ -136,8 +136,8 @@ const I18N = {
   '終了!': ['Finish!', '끝!'],
   'タイトルホルダー': ['Title holder', '타이틀 홀더'],
   'タイトルホルダー一覧': ['Title holders', '타이틀 홀더 목록'],
-  'ゲームごとの、これまででいちばん良い記録です(アーケード・2人以上で遊んだ記録だけ)': ['The best record so far in each game (only from Arcade games with 2+ players)', '게임별 지금까지의 최고 기록이에요 (아케이드·2명 이상으로 한 기록만)'],
-  'ここではタイトルは取れません(アーケード・2人以上のときだけ)': ['No title can be won here (Arcade with 2+ players only)', '여기서는 타이틀을 얻을 수 없어요 (아케이드·2명 이상일 때만)'],
+  'ゲームごとの、これまででいちばん良い記録です(アーケード・フルパーティで2人以上で遊んだ記録だけ)': ['The best record so far in each game (only from Arcade or Full Party games with 2+ players)', '게임별 지금까지의 최고 기록이에요 (아케이드·풀 파티에서 2명 이상으로 한 기록만)'],
+  'ここではタイトルは取れません(アーケード・フルパーティで2人以上のときだけ)': ['No title can be won here (Arcade or Full Party with 2+ players only)', '여기서는 타이틀을 얻을 수 없어요 (아케이드·풀 파티에서 2명 이상일 때만)'],
   'まだいない! 最初の記録を出そう': ['Nobody yet! Set the first record', '아직 없어요! 첫 기록을 세워 보세요'],
   '読み込みエラー': ['Loading error', '불러오기 오류'],
   'Firebaseを読み込めませんでした。通信状況を確認して、ページを再読み込みしてね。': ['Couldn’t load Firebase. Check your connection and reload the page.', 'Firebase를 불러오지 못했어요. 인터넷 연결을 확인하고 페이지를 새로고침해 주세요.'],
@@ -222,6 +222,32 @@ const I18N = {
   '優勝': ['Winner', '우승'],
   'ポイント2倍のラウンド': ['double-point round', '포인트 2배 라운드'],
   'ロビーに戻る(もう一度)': ['Back to lobby (play again)', '로비로 (한 번 더)'],
+
+  // --- フルパーティ(battle.js、v=32) ---
+  'フルパーティ': ['Full Party', '풀 파티'],
+  'フルパーティは2人からです': ['Full Party needs 2 or more players', '풀 파티는 2명부터예요'],
+  'フルパーティは2人から遊べます(1人ならソロゲームへ)': ['Full Party needs 2 or more players (alone? try Single Game)', '풀 파티는 2명부터 할 수 있어요 (혼자라면 단판 게임으로)'],
+  '全部のゲーム({n}こ)を、ランダムな順番で1回ずつ遊ぶ。': ['Play every game ({n}) once, in random order.', '모든 게임({n}개)을 랜덤 순서로 한 번씩 해요.'],
+  'はじめに1人1つ、ポイントを倍にしたいゲームを選ぶ。同じゲームを選んだ人が多いほど倍率が上がる(1人なら2倍、2人なら3倍…)。': ['First, everyone picks one game to multiply its points. The more people pick the same game, the bigger it gets (1 pick = ×2, 2 picks = ×3…).', '먼저 한 사람당 하나씩, 포인트를 배로 하고 싶은 게임을 골라요. 같은 게임을 고른 사람이 많을수록 배율이 올라가요 (1명이면 2배, 2명이면 3배…).'],
+  '最後のゲームは、ファイナルアップでさらに+1倍。': ['The last game gets Final Up: one more ×1 on top.', '마지막 게임은 파이널 업으로 +1배 더.'],
+  'このラウンドはポイント{n}倍': ['×{n} points this round', '이번 라운드는 포인트 {n}배'],
+  'ポイント{n}倍': ['×{n} points', '포인트 {n}배'],
+  '{names} が選んだゲーム!': ['Picked by {names}!', '{names} 님이 고른 게임!'],
+  'ポイントを倍にしたいゲームを1つ選ぼう(回して選んで「決定」)': ['Pick one game to multiply its points (spin, then tap “OK”)', '포인트를 배로 하고 싶은 게임을 하나 고르세요 (돌려서 고르고 「결정」)'],
+  '決定': ['OK', '결정'],
+  'だれが何を選んだかは、全員が選んだあとに発表!': ['Who picked what is revealed after everyone has picked!', '누가 무엇을 골랐는지는 모두 고른 뒤에 발표!'],
+  'あなたが選んだゲーム': ['Your pick', '내가 고른 게임'],
+  'ほかの人を待っています…': ['Waiting for the others…', '다른 사람을 기다리는 중…'],
+  '選んだ人': ['Picked', '고른 사람'],
+  '選んだ': ['Picked', '고름'],
+  'まだ': ['Not yet', '아직'],
+  '始める(まだの人はランダム)': ['Start (random for anyone who hasn’t picked)', '시작 (아직인 사람은 랜덤)'],
+  '全員が選ぶと発表になります': ['Picks are revealed when everyone is done', '모두 고르면 발표돼요'],
+  'まだ選んでいない人({n}人)は、ランダムで決まります。始めますか?': ['{n} player(s) haven’t picked yet. Their picks will be random. Start?', '아직 고르지 않은 사람({n}명)은 랜덤으로 정해져요. 시작할까요?'],
+  'みんなが選んだゲーム': ['Everyone’s picks', '모두가 고른 게임'],
+  '最後のゲームは、ファイナルアップでさらに+1倍!': ['The last game gets Final Up: one more ×1!', '마지막 게임은 파이널 업으로 +1배 더!'],
+  '選ばなかったので、ランダムで決まった': ['didn’t pick, so it was chosen at random', '고르지 않아서 랜덤으로 정해짐'],
+  '1ゲーム目へ': ['Start game 1', '1번째 게임으로'],
 
   // --- ゲームで共通に使うことば ---
   'お題': ['Target', '목표'],

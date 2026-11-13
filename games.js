@@ -61,7 +61,7 @@ function seededRng(seed) {
 function countdown(stage, game, round, onGo) {
   const m = multAt(round.index);
   const title = typeof titleHtml === 'function' ? titleHtml(game) : '';   // 👑 タイトルホルダー(core.js)
-  stage.innerHTML = `<div class="rule">${m > 1 ? `<div class="bonus">${bonusLabel(round.index)} ${T('このラウンドはポイント2倍')}</div>` : ''}<h2>${h(game.title)}</h2><p>${game.desc}</p>${title}<div class="cdnum" id="cd"></div></div>`;
+  stage.innerHTML = `<div class="rule">${m > 1 ? bonusHtml(round.index, true) : ''}<h2>${h(game.title)}</h2><p>${game.desc}</p>${title}<div class="cdnum" id="cd"></div></div>`;
   const cd = stage.querySelector('#cd');
   const iv = setInterval(() => {
     const rem = round.startAt - serverNow();
@@ -803,12 +803,12 @@ function drawAngleResult(el, data, size) {
 GAMES.push(
   {
     id: 'hata', title: '旗揚げゲーム!!',
-    desc: '審判のお題どおりに旗を上げ下げしよう!<br>下の「赤」「白」ボタンを押している間=上げる、離す=下げる。<br>「〜ない」のひっかけは、一瞬でも動かしたらアウト。お題に出ていない旗も動かさない。<br>だんだん速くなる! お題は15こ(1こ1点)+連続正解ボーナス(4連続+1・8連続+2・12連続+3・15連続+4)。最高25点。',
+    desc: '審判のお題どおりに旗を上げ下げしよう!<br>下の「赤」「白」ボタンを押している間=上げる、離す=下げる。<br>「〜ない」のひっかけは、一瞬でも動かしたらアウト。お題に出ていない旗も動かさない。<br>だんだん速くなる! お題は18こ(1こ1点)+連続正解ボーナス(4連続+2・8連続+3・12連続+3・18連続+4)。最高30点。',
     lowerBetter: false, miss: 0,
     isMiss: v => v <= 0,
     fmt: v => T('{n}点', { n: v }),
     play: playHata,
-    // リザルト用:15個の○×
+    // リザルト用:18個の○×
     result: drawHataResult
   },
   {
@@ -824,17 +824,17 @@ GAMES.push(
 /* --- 旗揚げゲーム!! --- */
 // 速さなどの数字。だんだん速くなる(はじめ → おわり)
 const hataCfg = {
-  parts: 15,                       // お題の部分の数(=最高15点。ボーナス込みで25点)
-  doubleMin: 4, doubleMax: 5,      // 2点のお題(赤と白)の数
+  parts: 18,                       // お題の部分の数(=最高18点。ボーナス込みで30点。v=32で15→18)
+  doubleMin: 6, doubleMax: 7,      // 2点のお題(赤と白)の数(v=32で4〜5→6〜7)
   negChance: 0.3,                  // 「〜ない」のひっかけが出る確率
   trapChance: 0.85,               // 「〜ない」が、動かしたくなる向きになる確率
   changeChance: 0.8,               // 「上げて/下げて」で、旗を動かす必要があるお題になる確率(残りは、もうその状態)
-  charStart: 106, charEnd: 54,     // 1文字が出る間隔(ms)(v=17で、20こ→15こに合わせてゆっくりに)
-  graceStart: 930, graceEnd: 560,  // 最後の文字が出てから判定までの猶予(ms)
+  charStart: 90, charEnd: 45,      // 1文字が出る間隔(ms)(v=32で106→54から速く)
+  graceStart: 800, graceEnd: 450,  // 最後の文字が出てから判定までの猶予(ms)(v=32で930→560から短く)
   lead: 600,                       // 始まってから1文字目が出るまで(ms)
   maxTotal: 17200                  // 全体がこれより長くなったら、全部を少し速くする(ms)
 };
-const HATA_BONUS = { 4: 1, 8: 2, 12: 3, 15: 4 };   // 連続正解のボーナス
+const HATA_BONUS = { 4: 2, 8: 3, 12: 3, 18: 4 };   // 連続正解のボーナス(v=32。合計12)
 
 // お題を作る。種が同じなら全員同じ
 // 部分 = { f: 'r'|'w'(旗), up: 上げ/下げ, neg: ひっかけ, text, ws: 始まり, we: 判定, q: 何問目, k: 何番目の部分 }
@@ -1088,7 +1088,7 @@ function rrectG(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-// リザルト用:○×を2段に並べる(15個なら 8+7)
+// リザルト用:○×を2段に並べる(18個なら 9+9)
 function drawHataResult(el, data, size) {
   const { ctx, w, h: H } = wideCanvas(el, size, 3, 0.68);
   if (!data || typeof data.m !== 'string') return;

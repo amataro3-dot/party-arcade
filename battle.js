@@ -12,10 +12,32 @@ const gameAt = i => GAMES.find(g => g.id === room.config.playlist[i]) || GAMES[0
 const multAt = i => {
   const c = room && room.config;
   if (!c) return 1; // 練習モードなど、ルームの外
+  // フルパーティ: 1 + そのゲームを選んだ人数。最後のゲームはファイナルアップで、さらに +1
+  if (c.mode === 'full') return 1 + pickersAt(i).length + (i === c.rounds - 1 ? 1 : 0);
   if (c.doubleUp && i === c.doubleRound) return 2;
   if (c.finalUp && i === c.rounds - 1) return 2;
   return 1;
 };
+/* フルパーティ: ラウンド i のゲームを選んだ人の pid(config.picks = { pid: { g: ゲームid, n: 名前, r: 1ならランダム } }) */
+function pickersAt(i) {
+  const c = room && room.config;
+  if (!c || c.mode !== 'full' || !c.picks || !c.playlist) return [];
+  const gid = c.playlist[i];
+  return Object.keys(c.picks).filter(id => c.picks[id] && c.picks[id].g === gid);
+}
+/* 倍率のお知らせ(カウントダウン画面: cd=true / 結果画面: cd=false)。倍でなければ空 */
+function bonusHtml(i, cd) {
+  const m = multAt(i);
+  if (m <= 1) return '';
+  const c = room.config;
+  if (c.mode !== 'full') return `<div class="bonus">${bonusLabel(i)} ${cd ? T('このラウンドはポイント2倍') : T('ポイント2倍')}</div>`;
+  const names = pickersAt(i).map(id => h(c.picks[id].n || '???')).join('・');
+  const sm = t => `<div style="font-size:14px;margin-top:2px">${t}</div>`;
+  return `<div class="bonus">${cd ? T('このラウンドはポイント{n}倍', { n: m }) : T('ポイント{n}倍', { n: m })}` +
+    (names ? sm(T('{names} が選んだゲーム!', { names })) : '') +
+    (i === c.rounds - 1 ? sm(T('ファイナルアップ!')) : '') + '</div>';
+}
+const needTwo = mode => mode === 'full' ? T('フルパーティは2人からです') : T('アーケードは2人からです');
 const bonusLabel = i => (room.config.finalUp && i === room.config.rounds - 1) ? T('ファイナルアップ!') : T('ダブルアップ!');
 const leaveLabel = () => (room.admin === pid && Object.keys(room.players).length === 1) ? T('ルームを解散') : T('退出');
 
@@ -42,6 +64,10 @@ function settingsCard() {
   if (st.mode === 'solo') {
     body = `<div class="sub">${T('選んだゲームを1回だけ遊ぶ。ポイントは付かない。')}</div>
       <div class="sub">${isAdmin ? T('ゲーム(回して選ぶ)') : T('ゲーム')}</div>${pickerHtml('sp', st.soloGame, isAdmin)}`;
+  } else if (st.mode === 'full') {
+    body = `<div class="sub">${T('全部のゲーム({n}こ)を、ランダムな順番で1回ずつ遊ぶ。', { n: GAMES.length })}</div>
+      <div class="sub">${T('はじめに1人1つ、ポイントを倍にしたいゲームを選ぶ。同じゲームを選んだ人が多いほど倍率が上がる(1人なら2倍、2人なら3倍…)。')}</div>
+      <div class="sub">${T('最後のゲームは、ファイナルアップでさらに+1倍。')}</div>`;
   } else {
     body = `<div class="sub">${T('ランダムなゲームを続けて遊び、合計ポイントで優勝を決める。')}</div>
       <div class="sub">${T('ラウンド数')}</div>${drumHtml('rp', roundChoices().map(String), clampRounds(st.rounds) - ROUND_MIN, isAdmin, 3, false)}
@@ -49,7 +75,7 @@ function settingsCard() {
       <label class="chk"><input type="checkbox" ${dis} ${st.doubleUp ? 'checked' : ''} data-chk="doubleUp"><span><b>${T('ダブルアップ')}</b><small>${T('ランダムな1ラウンドのポイントが2倍。そのゲームの開始前に発表される。')}</small></span></label>
       <label class="chk"><input type="checkbox" ${dis} ${st.finalUp ? 'checked' : ''} data-chk="finalUp"><span><b>${T('ファイナルアップ')}</b><small>${T('最終ラウンドのポイントが2倍。')}</small></span></label>`;
   }
-  return `<div class="card"><div class="sub">${isAdmin ? T('モード') : T('モード(管理者が決める)')}</div>${seg('mode', [['arcade', T('アーケード')], ['solo', T('ソロゲーム')]], st.mode)}${body}</div>`;
+  return `<div class="card"><div class="sub">${isAdmin ? T('モード') : T('モード(管理者が決める)')}</div>${seg('mode', [['arcade', T('アーケード')], ['full', T('フルパーティ')], ['solo', T('ソロゲーム')]], st.mode)}${body}</div>`;
 }
 
 function setSetting(k, v) {
@@ -60,8 +86,15 @@ function setSetting(k, v) {
 
 function startGame() {
   const st = settings();
-  if (st.mode !== 'solo' && Object.keys(room.players).length < 2) { toast(T('アーケードは2人からです')); return; }
+  if (st.mode !== 'solo' && Object.keys(room.players).length < 2) { toast(needTwo(st.mode)); return; }
   let cfg;
+  if (st.mode === 'full') {
+    // 全ゲームを1回ずつ。順番はここで決めるが、発表はしない。まず全員がゲームを選ぶ画面(phase 'pick')へ
+    const n = GAMES.length;
+    cfg = { mode: 'full', rounds: n, doubleUp: false, finalUp: true, doubleRound: -1, playlist: makePlaylist(n) };
+    db.ref('minigame-rooms/' + roomId).update({ phase: 'pick', config: cfg, picks: null, results: null, extras: null, round: null });
+    return;
+  }
   if (st.mode === 'solo') {
     // 回した直後にスタートを押しても、画面で選んでいるゲームが始まるようにする
     const shown = pickerValue('sp');
@@ -98,7 +131,7 @@ function renderLobby() {
     </div>
     ${settingsCard()}
     ${!isAdmin ? `<div class="center sub">${T('管理者のスタートを待っています…')}</div>`
-      : (settings().mode !== 'solo' && ps.length < 2) ? `<button class="btn" id="start" disabled style="opacity:0.45">${T('ゲームスタート')}</button><div class="center sub">${T('アーケードは2人から遊べます(1人ならソロゲームへ)')}</div>`
+      : (settings().mode !== 'solo' && ps.length < 2) ? `<button class="btn" id="start" disabled style="opacity:0.45">${T('ゲームスタート')}</button><div class="center sub">${settings().mode === 'full' ? T('フルパーティは2人から遊べます(1人ならソロゲームへ)') : T('アーケードは2人から遊べます(1人ならソロゲームへ)')}</div>`
       : `<button class="btn" id="start">${T('ゲームスタート')}</button>`}
     <button class="btn ghost" id="leave">${leaveLabel()}</button>`);
   $('#ridv').onclick = () => { if (navigator.clipboard) navigator.clipboard.writeText(roomId).then(() => toast(T('コピーしました'))); };
@@ -109,6 +142,101 @@ function renderLobby() {
   if ($('#rp')) drumInit('rp', i => setSetting('rounds', roundChoices()[i]));
   document.querySelectorAll('[data-chk]').forEach(i => { i.onchange = () => setSetting(i.dataset.chk, i.checked); });
   document.querySelectorAll('[data-act]').forEach(b => { b.onclick = () => playerAction(b.dataset.act, b.dataset.id); });
+}
+
+/* ---------- フルパーティ: ゲームを選ぶ画面(phase 'pick') ----------
+   選んでいる間は、だれが何を選んだかは秘密(「選んだ ✓」だけ見える)。1回決めたら変えられない。
+   全員が選ぶか、管理者が「始める」を押したら発表へ(選んでいない人はランダム)。
+   画面は1回だけ作って、あとは updatePick で中身だけ変える(ドラムロールが元に戻らないように) */
+const myPick = () => (room && room.picks && room.picks[pid]) || null;
+function renderPick() {
+  setApp(`
+    <h1>${T('フルパーティ')}</h1>
+    <div class="card" id="pickbox"></div>
+    <div class="card" id="pickst"></div>
+    <div id="pickadm"></div>
+    <button class="btn ghost" id="leave">${leaveLabel()}</button>`);
+  $('#leave').onclick = () => leaveRoom();
+  updatePick(true);
+}
+let pickShown = null;   // いま pickbox に出している状態(選ぶ前 '' / 選んだゲームのid)
+function updatePick(first) {
+  if (!$('#pickbox')) return;
+  const mine = myPick() || '';
+  if (first || pickShown !== mine) {
+    pickShown = mine;
+    const g = GAMES.find(x => x.id === mine);
+    if (!g) {
+      $('#pickbox').innerHTML = `<div class="sub">${T('ポイントを倍にしたいゲームを1つ選ぼう(回して選んで「決定」)')}</div>
+        ${pickerHtml('fp', GAMES[0].id, true)}
+        <button class="btn" id="pickgo">${T('決定')}</button>
+        <div class="sub center">${T('だれが何を選んだかは、全員が選んだあとに発表!')}</div>`;
+      pickerInit('fp', () => { });
+      $('#pickgo').onclick = guarded(() => {
+        const id = pickerValue('fp');
+        if (!id || myPick()) return;
+        db.ref('minigame-rooms/' + roomId + '/picks/' + pid).set(id);
+      });
+    } else {
+      $('#pickbox').innerHTML = `<div class="center"><div class="sub">${T('あなたが選んだゲーム')}</div><div style="font-size:22px;font-weight:800;color:#ffcc33;margin:6px 0">${h(g.title)}</div><div class="sub">${T('ほかの人を待っています…')}</div></div>`;
+    }
+  }
+  const ps = Object.entries(room.players).sort((a, b) => (a[1].joinedAt || 0) - (b[1].joinedAt || 0));
+  const picks = room.picks || {};
+  const done = ps.filter(([id]) => picks[id]).length;
+  $('#pickst').innerHTML = `<div class="sub">${T('選んだ人')} ${done}/${ps.length}</div>` +
+    ps.map(([id, p]) => `<div class="pl"><span class="plname">${id === room.admin ? '👑 ' : ''}${h(p.name)}${id === pid ? '<span class="you">' + T('あなた') + '</span>' : ''}</span><span style="font-weight:700;color:${picks[id] ? '#35d07f' : '#9aa3c7'}">${picks[id] ? T('選んだ') + ' ✓' : T('まだ')}</span></div>`).join('');
+  const isAdmin = room.admin === pid;
+  const adm = $('#pickadm');
+  const want = isAdmin ? 'admin' : 'guest';
+  if (adm.dataset.k !== want) {
+    adm.dataset.k = want;
+    adm.innerHTML = isAdmin
+      ? `<button class="btn sub" id="pickstart">${T('始める(まだの人はランダム)')}</button>`
+      : `<div class="center sub">${T('全員が選ぶと発表になります')}</div>`;
+    if (isAdmin) $('#pickstart').onclick = guarded(() => {
+      const picks2 = room.picks || {};
+      const left = Object.keys(room.players).filter(id => !picks2[id]).length;
+      if (left && !confirm(T('まだ選んでいない人({n}人)は、ランダムで決まります。始めますか?', { n: left }))) return;
+      finalizePicks();
+    });
+  }
+  const lv = $('#leave'); if (lv) lv.textContent = leaveLabel();
+}
+/* 管理者: 選びを確定して発表画面へ。選んでいない人はランダム(r: 1) */
+let pickFinalizing = false;
+function finalizePicks() {
+  if (room.admin !== pid || room.phase !== 'pick' || pickFinalizing) return;
+  pickFinalizing = true;
+  const picks = room.picks || {}, out = {};
+  Object.keys(room.players).forEach(id => {
+    const ok = GAMES.some(g => g.id === picks[id]);
+    out[id] = { g: ok ? picks[id] : GAMES[Math.floor(Math.random() * GAMES.length)].id, n: String(room.players[id].name || '???').slice(0, 20), r: ok ? 0 : 1 };
+  });
+  db.ref('minigame-rooms/' + roomId).update({ 'config/picks': out, phase: 'announce' })
+    .then(() => { pickFinalizing = false; }, () => { pickFinalizing = false; });
+}
+
+/* ---------- フルパーティ: 発表画面(phase 'announce') ----------
+   ゲームの順番はまだ秘密なので、「選んだ人数で決まる倍率」を出す(最後のゲームになったら、さらに+1) */
+function renderAnnounce() {
+  const c = room.config, picks = c.picks || {};
+  const byGame = {};
+  Object.keys(picks).forEach(id => { const p = picks[id]; if (p && p.g) (byGame[p.g] = byGame[p.g] || []).push(p); });
+  const rows = Object.keys(byGame).map(gid => ({ g: GAMES.find(x => x.id === gid), ps: byGame[gid] }))
+    .filter(r => r.g).sort((a, b) => b.ps.length - a.ps.length);
+  const isAdmin = room.admin === pid;
+  setApp(`
+    <h1>${T('みんなが選んだゲーム')}</h1>
+    <div class="card">
+      ${rows.map(r => `<div class="rk"><span class="rn" style="color:#ffcc33;min-width:44px">×${1 + r.ps.length}</span><span class="nm">${h(r.g.title)}<div class="detail">${r.ps.map(p => h(p.n || '???') + (p.r ? ' 🎲' : '')).join('・')}</div></span></div>`).join('')}
+    </div>
+    <div class="center sub">${T('最後のゲームは、ファイナルアップでさらに+1倍!')}</div>
+    ${rows.some(r => r.ps.some(p => p.r)) ? `<div class="center sub">🎲 = ${T('選ばなかったので、ランダムで決まった')}</div>` : ''}
+    ${isAdmin ? `<button class="btn" id="go1">${T('1ゲーム目へ')}</button>` : `<div class="center sub">${T('管理者の操作を待っています…')}</div>`}
+    <button class="btn ghost" id="leave">${leaveLabel()}</button>`);
+  $('#leave').onclick = guarded(leaveRoom);
+  if (isAdmin) $('#go1').onclick = guarded(() => startRound(0));
 }
 
 /* 管理者の操作(ロビーのみ): プレイヤーを外す / 管理者を渡す */
@@ -134,6 +262,11 @@ function startRound(i, cfg) {
 const RESULT_WAIT_MS = 2500;   // 全員が終わってから結果画面に進むまでの時間(みんなが自分の記録を見られるように)
 let allDone = null;            // 全員が終わった時刻 { key: ラウンドの目印, t: 時刻 }
 function adminCheck() {
+  // フルパーティで全員が選び終わったら、自動で発表へ
+  if (room && room.admin === pid && room.phase === 'pick') {
+    const picks = room.picks || {};
+    if (Object.keys(room.players).every(id => picks[id])) finalizePicks();
+  }
   if (!room || room.admin !== pid || room.phase !== 'playing' || !room.round) { allDone = null; return; }
   const res = getRes(room.round.index);
   const n = Object.keys(room.players).length;
@@ -155,7 +288,7 @@ function buildPlay() {
   const r = room.round, g = gameAt(r.index), c = room.config, m = multAt(r.index);
   roundState = { index: r.index, submitted: false };
   setApp(`
-    <div class="top"><span>${c.mode === 'solo' ? T('ソロゲーム') : T('ラウンド') + ' ' + (r.index + 1) + '/' + c.rounds}${m > 1 ? ' ×2' : ''}</span><span>${h(g.title)}</span></div>
+    <div class="top"><span>${c.mode === 'solo' ? T('ソロゲーム') : T('ラウンド') + ' ' + (r.index + 1) + '/' + c.rounds}${m > 1 ? ' ×' + m : ''}</span><span>${h(g.title)}</span></div>
     <div id="stage" class="stage"></div>
     <div id="wait" class="center sub"></div>`);
   const mine = getRes(r.index)[pid];
@@ -227,7 +360,7 @@ function standing(upTo) {
 
 /* ---------- 結果 ---------- */
 function toLobby() {
-  db.ref('minigame-rooms/' + roomId).update({ phase: 'lobby', results: null, extras: null, round: null, config: null });
+  db.ref('minigame-rooms/' + roomId).update({ phase: 'lobby', results: null, extras: null, round: null, config: null, picks: null });
 }
 
 function renderRoundResult() {
@@ -244,7 +377,7 @@ function renderRoundResult() {
   else actions = `<button class="btn" id="next">${last ? T('最終結果へ') : T('次のラウンドへ')}</button>`;
   setApp(`
     <h1>${T('{title} の結果', { title: h(title) })}</h1>
-    ${m > 1 ? `<div class="bonus">${bonusLabel(gi)} ${T('ポイント2倍')}</div>` : ''}
+    ${bonusHtml(gi, false)}
     ${g.resultTop ? '<div class="card center" id="rtop"></div>' : ''}
     <div class="card">
       ${list.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (' + T('あなた') + ')' : ''}</span><span class="val">${p.v === null ? T('未提出') : h(g.fmt(p.v, p.x))}</span>${solo ? '' : `<span class="pt">+${p.pts}</span>`}${crown(p.id)}${hasRes(p) ? '<div class="viz" data-rp></div>' : ((g.viz && p.x !== undefined && p.v !== null) ? `<div class="viz">${g.viz(p.v, p.x)}</div>` : '')}</div>`).join('')}
@@ -277,9 +410,9 @@ function renderFinal() {
     <h1>${T('最終結果')}</h1>
     <div class="win">🏆 ${T('優勝')}: ${winners}</div>
     <div class="card">
-      ${st.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (' + T('あなた') + ')' : ''}<div class="detail">${p.pts.map((v, i) => multAt(i) > 1 ? v + '★' : v).join(' / ')}</div></span><span class="tot">${p.total}</span></div>`).join('')}
+      ${st.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (' + T('あなた') + ')' : ''}<div class="detail">${p.pts.map((v, i) => multAt(i) <= 1 ? v : c.mode === 'full' ? v + '(×' + multAt(i) + ')' : v + '★').join(' / ')}</div></span><span class="tot">${p.total}</span></div>`).join('')}
     </div>
-    ${(c.doubleUp || c.finalUp) ? '<div class="center sub">★ = ' + T('ポイント2倍のラウンド') + '</div>' : ''}
+    ${(c.mode !== 'full' && (c.doubleUp || c.finalUp)) ? '<div class="center sub">★ = ' + T('ポイント2倍のラウンド') + '</div>' : ''}
     ${isAdmin ? '<button class="btn" id="again">' + T('ロビーに戻る(もう一度)') + '</button>' : '<div class="center sub">' + T('管理者の操作を待っています…') + '</div>'}
     <button class="btn ghost" id="leave">${leaveLabel()}</button>`);
   $('#leave').onclick = guarded(leaveRoom);
