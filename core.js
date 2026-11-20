@@ -25,7 +25,10 @@ const COUNTDOWN_MS = 5000;
 const $ = s => document.querySelector(s);
 const $app = document.getElementById('app');
 const h = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const setApp = html => { $app.innerHTML = html; guardBack(); };
+const setApp = html => { $app.innerHTML = html; setPlaying(false); guardBack(); };
+/* ゲーム中(説明〜終了)だけ、ページを画面の高さに固定する(index.html の html.playing) */
+function setPlaying(on) { document.documentElement.classList.toggle('playing', !!on); }
+let stageLabel = '';   // 説明画面の見出しの上に小さく出す文字(「ラウンド 3/10」など)。練習は空
 /* 戻るボタンの確認(backguard.js)。ルームの中: 対戦中は「ゲームをやめますか？」、それ以外は「ルームから出ますか？」(どちらも、はいでルームを出る)。
    ルームの外は「ホームに戻りますか？」。練習のゲーム中は startPractice で「ゲームをやめますか？」にする */
 function guardBack() {
@@ -313,9 +316,10 @@ function startPractice(id) {
   clearTimers();
   const round = { index: 0, startAt: serverNow() + COUNTDOWN_MS, delay: 2000 + Math.floor(Math.random() * 3000) };
   setApp(`
-    <div class="top"><span>${T('練習モード')}</span><span>${h(g.title)}</span></div>
-    <div id="stage" class="stage"></div>
-    <button class="btn ghost" id="quit">${T('やめる')}</button>`);
+    <button class="xbtn" id="quit" aria-label="${T('やめる')}">✕</button>
+    <div id="stage" class="stage"></div>`);
+  stageLabel = '';
+  setPlaying(true);
   let done = false;
   $('#quit').onclick = () => { done = true; clearTimers(); renderPractice(); };
   if (window.BackGuard) BackGuard.set('game', () => $('#quit') && $('#quit').onclick());

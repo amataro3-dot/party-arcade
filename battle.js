@@ -288,9 +288,10 @@ function buildPlay() {
   const r = room.round, g = gameAt(r.index), c = room.config, m = multAt(r.index);
   roundState = { index: r.index, submitted: false };
   setApp(`
-    <div class="top"><span>${c.mode === 'solo' ? T('ソロゲーム') : T('ラウンド') + ' ' + (r.index + 1) + '/' + c.rounds}${m > 1 ? ' ×' + m : ''}</span><span>${h(g.title)}</span></div>
     <div id="stage" class="stage"></div>
     <div id="wait" class="center sub"></div>`);
+  stageLabel = c.mode === 'solo' ? T('ソロゲーム') : T('ラウンド') + ' ' + (r.index + 1) + '/' + c.rounds;   // 説明画面の見出しの上に出す
+  setPlaying(true);
   const mine = getRes(r.index)[pid];
   if (mine !== undefined && mine !== null) { roundState.submitted = true; showSubmitted(mine, getExtra(r.index)[pid]); return; }
   if (serverNow() - r.startAt > 1500) { submit(g.miss); return; } // 途中復帰は不参加扱い
@@ -320,6 +321,7 @@ function submit(v, x) {
 }
 function showSubmitted(v, x) {
   const g = gameAt(roundState.index);
+  setPlaying(false);   // 記録の画面は縦に長くなることがあるので、スクロールできるように戻す
   $('#stage').innerHTML = `<div class="center"><div class="sub">${T('あなたの記録')}</div><div class="big-num" style="font-size:44px">${h(g.fmt(v, x))}</div>${g.result && x !== undefined ? '<div class="viz" id="rbox"></div>' : (g.viz && x ? g.viz(v, x) : '')}</div>`;
   if (g.result && x !== undefined) callResult(g, $('#rbox'), x, 200);
   updateWaiting();

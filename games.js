@@ -61,8 +61,13 @@ function seededRng(seed) {
 function countdown(stage, game, round, onGo) {
   const m = multAt(round.index);
   const title = typeof titleHtml === 'function' ? titleHtml(game) : '';   // 👑 タイトルホルダー(core.js)
-  stage.innerHTML = `<div class="rule">${m > 1 ? bonusHtml(round.index, true) : ''}<h2>${h(game.title)}</h2><p>${game.desc}</p>${title}<div class="cdnum" id="cd"></div></div>`;
+  const label = typeof stageLabel === 'string' && stageLabel ? `<div class="rlabel">${h(stageLabel)}</div>` : '';   // 「ラウンド 3/10」など(上の行をなくしたので、ここに出す)
+  stage.innerHTML = `<div class="rule">${label}${m > 1 ? bonusHtml(round.index, true) : ''}<h2>${h(game.title)}</h2><p>${game.desc}</p>${title}<div class="cdnum" id="cd"></div></div>`;
   const cd = stage.querySelector('#cd');
+  cd.textContent = '5';
+  // 小さい画面で入りきらないときは、文字を少し小さくする(index.html の .rule.tight)
+  const rule = stage.querySelector('.rule');
+  if (rule && stage.scrollHeight > stage.clientHeight + 1) rule.classList.add('tight');
   const iv = setInterval(() => {
     const rem = round.startAt - serverNow();
     if (rem <= 0) { clearInterval(iv); onGo(); }
