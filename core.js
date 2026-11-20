@@ -20,7 +20,12 @@ const firebaseConfig = {
 const APP_CHECK_SITE_KEY = '6LfFffwtAAAAAKMoDAtqJDlgLK720RWBuBENti2t';
 
 const MAX_PLAYERS = 8;
-const POINTS = [10, 8, 6, 5, 4, 3, 2, 1]; // 順位ポイント
+// 順位ポイント(v=34〜): 1位10点・最下位1点、そのあいだは人数で均等に分ける(四捨五入)。
+// 2人 10/1、4人 10/7/4/1、8人 10/9/7/6/5/4/2/1。失敗・未提出は0点(battle.js の rankGame)
+function rankPoints(rank, n) {
+  if (n <= 1) return 10;
+  return 1 + Math.round(9 * (n - rank) / (n - 1));
+}
 const COUNTDOWN_MS = 5000;
 const $ = s => document.querySelector(s);
 const $app = document.getElementById('app');

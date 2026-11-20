@@ -343,7 +343,7 @@ function rankGame(gi) {
   const better = (a, b) => a.v !== null && (b.v === null || (g.lowerBetter ? a.v < b.v : a.v > b.v));
   list.forEach(p => {
     p.rank = 1 + list.filter(q => better(q, p)).length;
-    p.pts = ((p.v === null || g.isMiss(p.v)) ? 0 : (POINTS[p.rank - 1] !== undefined ? POINTS[p.rank - 1] : 1)) * multAt(gi);
+    p.pts = ((p.v === null || g.isMiss(p.v)) ? 0 : rankPoints(p.rank, list.length)) * multAt(gi);   // 人数に合わせて 10〜1点(core.js)
   });
   list.sort((a, b) => a.rank - b.rank);
   return list;
@@ -382,7 +382,7 @@ function renderRoundResult() {
     ${bonusHtml(gi, false)}
     ${g.resultTop ? '<div class="card center" id="rtop"></div>' : ''}
     <div class="card">
-      ${list.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (' + T('あなた') + ')' : ''}</span><span class="val">${p.v === null ? T('未提出') : h(g.fmt(p.v, p.x))}</span>${solo ? '' : `<span class="pt">+${p.pts}</span>`}${crown(p.id)}${hasRes(p) ? '<div class="viz" data-rp></div>' : ((g.viz && p.x !== undefined && p.v !== null) ? `<div class="viz">${g.viz(p.v, p.x)}</div>` : '')}</div>`).join('')}
+      ${list.map(p => `<div class="rk"><span class="rn">${p.rank}</span><span class="nm">${h(p.name)}${p.id === pid ? ' (' + T('あなた') + ')' : ''}</span>${solo ? '' : `<span class="pt">+${p.pts}</span>`}<span class="val">${p.v === null ? T('未提出') : h(g.fmt(p.v, p.x))}</span>${crown(p.id)}${hasRes(p) ? '<div class="viz" data-rp></div>' : ((g.viz && p.x !== undefined && p.v !== null) ? `<div class="viz">${g.viz(p.v, p.x)}</div>` : '')}</div>`).join('')}
     </div>
     ${(solo || last) ? '' : `<div class="card">
       <div class="sub">${T('ここまでの合計')}</div>
