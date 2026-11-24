@@ -198,7 +198,7 @@ function renderHome(msg) {
     </div>
     <div class="card">
       <label>${T('ルームID')}</label>
-      <input id="rid" inputmode="numeric" maxlength="4" placeholder="${T('4けたの数字')}">
+      <input id="rid" inputmode="numeric" maxlength="4" placeholder="${T('4けたの数字')}" value="${(localStorage.getItem('room-last') || '').replace(/\D/g, '')}">
       <button class="btn sub" id="join">${T('入室する')}</button>
     </div>
     <div class="card">
@@ -410,7 +410,7 @@ async function joinRoom() {
 
 /* ---------- ルーム ---------- */
 function enterRoom(id) {
-  roomId = id; localStorage.setItem('room', id); viewKey = '';
+  roomId = id; localStorage.setItem('room', id); localStorage.setItem('room-last', id); viewKey = '';
   roomRef = db.ref('minigame-rooms/' + id);
   roomCb = roomRef.on('value', s => {
     room = s.val();
