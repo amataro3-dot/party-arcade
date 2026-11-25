@@ -206,6 +206,7 @@ function renderHome(msg) {
       <button class="btn sub" id="titlesBtn">👑 ${T('タイトルホルダー一覧')}</button>
     </div>
     <div class="msg" id="msg">${h(msg || '')}</div>
+    <div class="about"><h2>${T("Party-Arcade とは")}</h2><p>${T("最大8人で、15種類のミニゲームでポイントを競うパーティーゲームです。反射神経・感覚・記憶力と、ゲームごとに得意な人がちがうので、最後まで誰が勝つかわかりません。ひとりで練習もできます。")}</p><p><a href="${sitePath('/howto-party-arcade.html')}">${T('📖 遊び方を見る →')}</a></p></div>
     <p class="center" style="font-size:13px;margin:4px 0"><a href="${sitePath('/')}" style="color:#9aa3c7">${T("Muddy's Games トップ")}</a> ・ <a href="${sitePath('/privacy.html')}" style="color:#9aa3c7">${T('プライバシーポリシー')}</a></p>`);
   // 言語の切りかえ: 入力中のなまえは残したまま、画面を作り直す
   langSwitchInit(() => { const n = $('#name'); if (n) myName = n.value; renderHome(msg); });

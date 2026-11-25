@@ -151,6 +151,10 @@ const I18N = {
   '練習モード(1人で遊ぶ)': ['Practice mode (play alone)', '연습 모드 (혼자 하기)'],
   "Muddy's Games トップ": ["Muddy's Games home", "Muddy's Games 홈"],
   'プライバシーポリシー': ['Privacy policy', '개인정보 처리방침'],
+  /* 最初の画面の説明(2026-11-25。AdSense 審査のため) */
+  "Party-Arcade とは": ["What is Party-Arcade?", "Party-Arcade란?"],
+  "最大8人で、15種類のミニゲームでポイントを競うパーティーゲームです。反射神経・感覚・記憶力と、ゲームごとに得意な人がちがうので、最後まで誰が勝つかわかりません。ひとりで練習もできます。": ["A party game where up to 8 players compete for points across 15 mini-games. Reflexes, sense, memory — each game favors someone different, so nobody knows who will win until the very end. You can also practice on your own.", "최대 8명이 15가지 미니게임으로 점수를 겨루는 파티 게임입니다. 반사신경, 감각, 기억력 등 게임마다 잘하는 사람이 달라서 끝까지 누가 이길지 모릅니다. 혼자서 연습할 수도 있습니다."],
+  "📖 遊び方を見る →": ["📖 How to play →", "📖 게임 방법 보기 →"],
   '練習モード': ['Practice mode', '연습 모드'],
   '遊ぶゲームを回して選ぶ(記録は保存されない)': ['Spin to choose a game (records aren’t saved)', '돌려서 게임을 고르세요 (기록은 저장되지 않아요)'],
   'このゲームで遊ぶ': ['Play this game', '이 게임 하기'],
